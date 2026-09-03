@@ -7,6 +7,14 @@ from src import sly, log, vmt, moxi
 
 FILE_NAME = pathlib.Path(__file__).name
 
+
+def _unquote(symbol: str) -> str:
+    """Strips SMT-LIB pipe quoting from a symbol, if present."""
+    if len(symbol) > 1 and symbol[0] == "|" and symbol[-1] == "|":
+        return symbol[1:-1]
+    return symbol
+
+
 class Lexer(sly.Lexer):
 
     def __init__(self, filename: str) -> None:
@@ -144,8 +152,15 @@ class Parser(sly.Parser):
     @_("LPAREN CMD_DEFINE_FUN SYMBOL LPAREN sorted_var_list RPAREN sort term RPAREN")
     def command(self, p):
         if ":next" in p[7].attrs:
-            self.source[p[7].attrs[":next"]] = (p[7].str_no_attrs(), p[6])
-            self.next[p[7].str_no_attrs()] = (p[7].attrs[":next"], p[6])
+            # MathSAT's VMT printer always pipe-quotes the :next symbol
+            # (|n_0|), while the matching declare-fun writes it bare (n_0).
+            # Without stripping the quotes the next-state variables never
+            # match their declarations, so they silently degrade into free
+            # inputs and the translated system is unsound.
+            cur = _unquote(p[7].str_no_attrs())
+            nxt = _unquote(p[7].attrs[":next"])
+            self.source[nxt] = (cur, p[6])
+            self.next[cur] = (nxt, p[6])
         if ":init" in p[7].attrs:
             self.init.append(p[7])
         if ":trans" in p[7].attrs:
