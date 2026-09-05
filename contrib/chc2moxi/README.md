@@ -113,31 +113,12 @@ rounds down; the two agree only once the denominator is positive. Z3 confirms
 it: negating the equivalence is `unsat`, and dropping the split makes it `sat`
 at a = -2, b = -3.
 
-## Scope: linear clauses, and what happens to the rest
+## Scope
 
-Only **linear** Horn clauses go through the pipeline above. A clause with two
-or more body predicates is a derivation *tree*, and a MoXI system describes a
-*path*; `horn2vmt` reports these as `non-unary clause found`, and the pipeline
-rejects them rather than approximating.
-
-`nonlinear/` is a separate study of whether that limit can be lifted. It can,
-and the encodings are there:
-
-| file | what it is |
-|---|---|
-| `nonlinear/stack_encode.py` | the textbook pushdown-to-transition-system construction: the call stack becomes an explicit state variable. **Exact in both directions** -- nothing approximated. Int and BitVec flavours, and it can emit the result back out as linear CHC. |
-| `nonlinear/depth_encode.py` | array-free alternative: the stack becomes D scalar registers used as a shift register, so everything stays in QF_LIA. Sound for REACHABLE; UNREACHABLE only means "no counterexample within depth D". |
-| `nonlinear/README.md` | the measurements, and why the honest answer is *the translation is exact, the result is not checkable* |
-| `nonlinear/plan.md` | the design note behind both |
-| `nonlinear/examples/` | `fib`, `mc91`, `sum_linear` as CHC |
-| `nonlinear/measurements/` | the raw numbers behind `nonlinear/README.md` |
-
-The short version of that study: `stack_encode.py` is exact, but it puts the
-call stack in an array, and no engine measured could discharge the result --
-`imc` has no array interpolation, `ic3ia` extracts no predicates, `ic3` refuses
-unbounded state, and Spacer times out too. `depth_encode.py` removes the array
-at the cost of completeness. That is why the production pipeline still rejects
-non-linear input instead of encoding it.
+Only **linear** Horn clauses translate. A clause with two or more body
+predicates is a derivation *tree*, and a MoXI system describes a *path*;
+`horn2vmt` reports these as `non-unary clause found` and they are rejected
+rather than approximated.
 
 See `check-later.md` at the repository root for the decisions behind this,
 defects found in neighbouring projects, and what is still open.
