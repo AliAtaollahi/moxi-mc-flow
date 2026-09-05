@@ -6,7 +6,8 @@ a defect found in a neighbouring project, or a limit worth knowing before
 trusting a number.
 
 Context: 9272 CHC source files went through
-`presanitize -> horn2vmt -> sanitize_vmt -> vmt2moxi --with-lets -> sortcheck`.
+`preprocess_chc -> horn2vmt -> preprocess_vmt -> vmt2moxi --with-lets -> sortcheck`,
+which is what `translate.py <file>.smt2 moxi --with-lets` now runs.
 8965 translated; after collapsing byte-identical models, 5474 tasks remain.
 
 ---
@@ -69,7 +70,7 @@ re-encodes `div` and `mod` through the reals, so the VMT comes back mentioning
 the sort check. This was the largest single loss in the first translation pass:
 **2973 files**.
 
-`sanitize_vmt.py` (in the CHC pipeline, not in this repo) reverses the rewrite:
+`src/preprocess_vmt.py` reverses the rewrite:
 
 | MathSAT emits | restored to |
 |---|---|
