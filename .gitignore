@@ -163,3 +163,6 @@ pyproject.toml
 
 tmp/
 __*
+
+# CHC front end
+deps/horn2vmt

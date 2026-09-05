@@ -10,6 +10,7 @@ from typing import Optional
 
 from src import (
     btor,
+    chc2moxi,
     json2moxi,
     log,
     moxi2btor,
@@ -24,6 +25,7 @@ FILE_NAME = pathlib.Path(__file__).name
 FILE_DIR = pathlib.Path(__file__).parent
 
 CATBTOR = FILE_DIR / "deps" / "catbtor"
+HORN2VMT = FILE_DIR / "deps" / "horn2vmt"
 SORTCHECK = FILE_DIR / "sortcheck.py"
 JSON_SCHEMA = FILE_DIR / "json-schema" / "schema"
 
@@ -156,6 +158,37 @@ def main(
             if keep:
                 with open(str(keep), "w") as f:
                     f.write(str(moxi_program))
+        case (".smt2", "moxi"):
+            if chc2moxi.translate_file(
+                input_path, output_path, workdir, HORN2VMT, with_lets, logic
+            ):
+                return FAIL
+        case (".smt2", "moxi-json"):
+            moxi_path = workdir / input_path.with_suffix(".moxi").name
+
+            if chc2moxi.translate_file(
+                input_path, moxi_path, workdir, HORN2VMT, with_lets, logic
+            ):
+                return FAIL
+
+            if moxi2json.main(moxi_path, output_path, False, do_ppjson):
+                return FAIL
+
+            if keep:
+                shutil.copy(moxi_path, keep)
+        case (".smt2", "btor2"):
+            moxi_path = workdir / input_path.with_suffix(".moxi").name
+
+            if chc2moxi.translate_file(
+                input_path, moxi_path, workdir, HORN2VMT, with_lets, logic
+            ):
+                return FAIL
+
+            if moxi2btor.translate_file(moxi_path, output_path, JSON_SCHEMA, int_width, do_pickle):
+                return FAIL
+
+            if keep:
+                shutil.copy(moxi_path, keep)
         case (".moxi", "moxi-json"):
             if moxi2json.main(input_path, output_path, False, do_ppjson):
                 return FAIL
@@ -229,6 +262,7 @@ if __name__ == "__main__":
         "--ppjson", action="store_true", help="pretty print json output"
     )
     parser.add_argument("--catbtor", help="path to catbtor for BTOR2 validation")
+    parser.add_argument("--horn2vmt", help="path to horn2vmt for CHC translation")
     parser.add_argument("--sortcheck", help="path to sortcheck.py for MoXI validation")
     parser.add_argument("--jsonschema", help="path to `json-schema` directory for JSON validation")
     parser.add_argument(
@@ -277,6 +311,9 @@ if __name__ == "__main__":
 
     if args.catbtor:
         CATBTOR = pathlib.Path(args.catbtor)
+
+    if args.horn2vmt:
+        HORN2VMT = pathlib.Path(args.horn2vmt)
 
     if args.sortcheck:
         SORTCHECK = pathlib.Path(args.sortcheck)
