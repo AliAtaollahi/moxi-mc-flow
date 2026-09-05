@@ -1,0 +1,14 @@
+(set-logic QF_NRA)
+(define-system main 
+   :input () 
+   :output ((x_0 Real) (n_0 Real)) 
+   :local () 
+   :init (let ((.def_8 x_0)) (let ((.def_28 (= .def_8 0.0))) (let ((.def_10 n_0)) (let ((.def_27 (= .def_10 0.0))) (and .def_27 .def_28))))) 
+   :trans (let ((.def_22 (* (- 1.0) n_0'))) (let ((.def_10 n_0)) (let ((.def_23 (+ .def_10 .def_22))) (let ((.def_24 (= .def_23 (- 1.0)))) (let ((.def_14 (* 2.0 n_0'))) (let ((.def_16 (* (- 1.0) x_0'))) (let ((.def_19 (+ .def_16 .def_14))) (let ((.def_8 x_0)) (let ((.def_20 (+ .def_8 .def_19))) (let ((.def_21 (= .def_20 1.0))) (and .def_21 .def_24))))))))))) 
+   :inv true )
+(check-system main 
+   :input () 
+   :output ((x_0 Real) (n_0 Real)) 
+   :local () 
+   :reachable (rch_0 (not (let ((.def_10 n_0)) (let ((.def_30 (* .def_10 .def_10))) (let ((.def_8 x_0)) (= .def_8 .def_30))))))
+   :query (qry_rch_0 (rch_0)))

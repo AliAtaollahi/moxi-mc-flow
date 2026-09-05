@@ -4,8 +4,9 @@ Translators from SMV to MoXI to BTOR2 and their witnesses. This repository provi
 script (`translate.py`), a model checking script (`modelcheck.py`), a sort checker (`sortcheck.py`),
 and a JSON validator (`json-schema/validate.py`) for MoXI files in either a concrete or JSON
 dialect. For examples of MoXI files, see the `test/moxi` directory. The translators support SMV,
-VMT-LIB, MoXI, and MoXI-JSON as source languages and MoXI, MoXI-JSON, and Btor2 as target languages.
-The toolchain uses PANDA to translate LTLSPECs in SMV to their automata counterparts.
+VMT-LIB, CHC, MoXI, and MoXI-JSON as source languages and MoXI, MoXI-JSON, and Btor2 as target
+languages. The toolchain uses PANDA to translate LTLSPECs in SMV to their automata counterparts,
+and `horn2vmt` to translate constrained Horn clauses to VMT-LIB.
 
 ![Toolchain](toolchain.png "Toolchain")
 
@@ -38,6 +39,11 @@ jsonschema) can be installed on Ubuntu via:
 
     sudo apt-get install build-essential xutils-dev curl cmake flex bison libgmp3-dev default-jre
 
+`horn2vmt` is only needed to translate CHC and is not installed by `setup-all.sh`: it is part of
+ic3ia, which links against MathSAT, and neither can be downloaded without accepting terms on a
+web page. `./contrib/setup-ic3ia.sh` builds it into `deps/` from a source tree you point
+`IC3IA_DIR` at.
+
 `./contrib/setup-all.sh` installs all supported solvers (`AVR`, `Pono`, `BtorMC`) as well as
 `btor2tools` for BTOR2 validation and nuXmv for experiments. You can also choose to install specific
 solvers by running the individual setup scripts in `contrib/`. For example, to just install `AVR`,
@@ -47,9 +53,9 @@ outputs (i.e., to run with the `--validate` option). To run `modelcheck.py`, at 
 
 ## Running the translators
 
-To run the `translate.py` script, feed in a file with a `.smv`, `.moxi`, `.json`, or `.vmt` file
-extension and select language to translate to (moxi, moxi-json, or btor2). You can ask catbtor or
-sortcheck.py to validate the output with the `--validate` flag. Some example invocations (from
+To run the `translate.py` script, feed in a file with a `.smv`, `.moxi`, `.json`, `.vmt`, or `.smt2`
+file extension and select language to translate to (moxi, moxi-json, or btor2). You can ask catbtor
+or sortcheck.py to validate the output with the `--validate` flag. Some example invocations (from
 `/home/moxi-mc-flow`):
 
     python3 translate.py test/smv/Delay.smv moxi --output Delay.moxi --validate
@@ -62,6 +68,17 @@ You can also cast Int types to bit vectors of specified widths if using a logic 
 example:
 
     python3 translate.py test/moxi/QF_LIA/TrafficLightEnum2.moxi btor2 --output TrafficLightEnum2.btor2 --validate --intwidth 64 
+
+A `.smt2` file is read as a set of constrained Horn clauses. `translate.py` runs `horn2vmt` on it
+to get a VMT-LIB transition system and then translates that to the target language, so `deps/horn2vmt`
+(or `--horn2vmt`) is required:
+
+    python3 translate.py test/chc/VarDiv.smt2 moxi --with-lets --output VarDiv.moxi --validate
+
+Pass `--with-lets` when translating CHC. Without it the frozen definitions are emitted as an `:inv`
+constraint that mentions primed variables, and a model checker that asserts `:inv` at both the
+current and the next state then over-constrains the transition relation. The logic is inferred and
+confirmed by sort checking unless `--logic` names one.
 
 Refer to the usage information for more options:
 
@@ -92,6 +109,15 @@ Refer to the usage information for more options:
 
 
 ## Notes
+
+- Only *linear* Horn clauses translate. A clause with two or more predicates in its body is a
+derivation tree where a MoXI system describes a path; `horn2vmt` reports these as `non-unary clause
+found` and they are rejected rather than approximated.
+
+- MathSAT, which `horn2vmt` is built on, has no integer division: it re-encodes `div` and `mod`
+through the reals, and MoXI has no mixed Int/Real logic. `src/preprocess_vmt.py` reverses that
+encoding, which is why an integer CHC benchmark comes back with `div` and `mod` rather than
+`to_real` and `to_int`.
 
 - No model checker (`AVR`, `Pono`, `BtorMC`) supports the justice keyword in BTOR2, but we do
 support the translation. So, a file with a `:fairness` formula will run properly with
