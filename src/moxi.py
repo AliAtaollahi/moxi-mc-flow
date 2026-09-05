@@ -1481,6 +1481,19 @@ def sort_check_apply_qf_abv(node: Apply) -> bool:
     return False
 
 
+def sort_check_apply_qf_alia(node: Apply) -> bool:
+    identifier_class = (node.identifier.symbol, node.identifier.num_indices())
+
+    if identifier_class in CORE_RANK_TABLE:
+        return sort_check_apply_core(node)
+    elif identifier_class in ARRAY_RANK_TABLE:
+        return sort_check_apply_arrays(node)
+    elif identifier_class in INT_RANK_TABLE:
+        return sort_check_apply_int(node)
+
+    return False
+
+
 def sort_check_apply_qf_lia(node: Apply) -> bool:
     identifier_class = (node.identifier.symbol, node.identifier.num_indices())
 
@@ -1737,6 +1750,18 @@ QF_UFNIA = Logic(
     True
 )
 
+# Arrays indexed by Int, the counterpart of QF_ABV.  The arithmetic is left as
+# permissive as QF_NIA rather than restricted the way QF_LIA is: the CHC-COMP
+# array tracks reach here through horn2vmt, which emits div, mod and products
+# of two variables, and QF_ALIA is the only array+Int logic MoXIchecker knows.
+QF_ALIA = Logic(
+    "QF_ALIA",
+    {("Bool", 0), ("Int", 0), ("Array", 0)},
+    CORE_RANK_TABLE.keys() | ARRAY_RANK_TABLE.keys() | INT_RANK_TABLE.keys(),
+    sort_check_apply_qf_alia,
+    False
+)
+
 QF_LRA = Logic(
     "QF_LRA",
     {("Bool", 0), ("Int", 0), ("Real", 0)},
@@ -1763,6 +1788,7 @@ LOGIC_TABLE: dict[str, Logic] = {
     "QF_NIA": QF_NIA,
     "QF_UFLIA": QF_UFLIA,
     "QF_UFNIA": QF_UFNIA,
+    "QF_ALIA": QF_ALIA,
     "QF_LRA": QF_LRA,
     "QF_NRA": QF_NRA,
 }
