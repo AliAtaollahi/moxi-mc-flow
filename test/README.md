@@ -43,3 +43,10 @@ Altogether, a file is of the form:
 
 The script will print each instruction run and if that test passes or not. If
 the test fails, the result of the diff is printed to stdout.
+## Notes
+
+`chc2moxi.json` needs `horn2vmt` in `deps/` (see `contrib/setup-ic3ia.sh`), so
+it is not part of the CI workflow; run it with `scripts/run_chc2moxi.sh`. Its
+expected outputs are byte comparisons against the MoXI a particular ic3ia and
+MathSAT build produces, so a different build of either can diff without
+anything being wrong -- read the diff before trusting the failure.

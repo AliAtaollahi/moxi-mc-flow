@@ -1,0 +1,86 @@
+{
+    "script": "../translate.py",
+    "options": [
+        "moxi",
+        "--with-lets",
+        "--validate",
+        "--overwrite"
+    ],
+    "tests": [
+        {
+            "input": "chc/chc23-liaarr-0115.smt2",
+            "output": "chc/chc23-liaarr-0115.moxi",
+            "expected_output": [
+                [
+                    "chc/chc23-liaarr-0115.moxi.expect",
+                    "chc/chc23-liaarr-0115.moxi"
+                ]
+            ]
+        },
+        {
+            "input": "chc/chc25-lialin-0208.smt2",
+            "output": "chc/chc25-lialin-0208.moxi",
+            "expected_output": [
+                [
+                    "chc/chc25-lialin-0208.moxi.expect",
+                    "chc/chc25-lialin-0208.moxi"
+                ]
+            ]
+        },
+        {
+            "input": "chc/VarDiv.smt2",
+            "output": "chc/VarDiv.moxi",
+            "expected_output": [
+                [
+                    "chc/VarDiv.moxi.expect",
+                    "chc/VarDiv.moxi"
+                ]
+            ]
+        },
+        {
+            "input": "chc/chc21-lrats-0368.smt2",
+            "output": "chc/chc21-lrats-0368.moxi",
+            "expected_output": [
+                [
+                    "chc/chc21-lrats-0368.moxi.expect",
+                    "chc/chc21-lrats-0368.moxi"
+                ]
+            ]
+        },
+        {
+            "input": "chc/chc19-lrats-0014.smt2",
+            "output": "chc/chc19-lrats-0014.moxi",
+            "expected_output": [
+                [
+                    "chc/chc19-lrats-0014.moxi.expect",
+                    "chc/chc19-lrats-0014.moxi"
+                ]
+            ]
+        },
+        {
+            "input": "chc/chc25-liaarr-0038.smt2",
+            "output": "chc/chc25-liaarr-0038.moxi",
+            "expected_output": [
+                [
+                    "chc/chc25-liaarr-0038.moxi.expect",
+                    "chc/chc25-liaarr-0038.moxi"
+                ]
+            ]
+        },
+        {
+            "input": "chc/chc25-bv-0376.smt2",
+            "output": "chc/chc25-bv-0376.moxi",
+            "expected_output": [
+                [
+                    "chc/chc25-bv-0376.moxi.expect",
+                    "chc/chc25-bv-0376.moxi"
+                ]
+            ]
+        },
+        {
+            "input": "chc/NonLinear.smt2",
+            "output": "chc/NonLinear.moxi",
+            "expected_returncode": 1
+        }
+    ]
+}

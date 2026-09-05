@@ -1,0 +1,14 @@
+(set-logic QF_ALIA)
+(define-system main 
+   :input () 
+   :output ((A_0 (Array Int Int)) (.loc.1 Bool)) 
+   :local () 
+   :init (let ((.def_10 .loc.1)) (not .def_10)) 
+   :trans (let ((.def_10 .loc.1)) (let ((.def_12 (not .def_10))) (and .loc.1' .def_12))) 
+   :inv true )
+(check-system main 
+   :input () 
+   :output ((A_0 (Array Int Int)) (.loc.1 Bool)) 
+   :local () 
+   :reachable (rch_0 (not (let ((.def_10 .loc.1)) (not .def_10))))
+   :query (qry_rch_0 (rch_0)))

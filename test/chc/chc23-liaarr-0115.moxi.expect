@@ -1,0 +1,14 @@
+(set-logic QF_LIA)
+(define-system main 
+   :input () 
+   :output () 
+   :local () 
+   :init false 
+   :trans false 
+   :inv true )
+(check-system main 
+   :input () 
+   :output () 
+   :local () 
+   :reachable (rch_0 (not true))
+   :query (qry_rch_0 (rch_0)))
