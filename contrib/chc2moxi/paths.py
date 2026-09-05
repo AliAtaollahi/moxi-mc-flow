@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Where this pipeline finds the tools and directories it drives.
+"""Where the CHC-COMP harness finds the tools and directories it drives.
 
 These scripts live in `contrib/chc2moxi/` inside a moxi-mc-flow checkout, so
 the checkout is found by walking two directories up and needs no
-configuration.  Everything else lives outside this repository and is an
+configuration. Everything else lives outside this repository and is an
 environment variable with a usable default:
 
-    HORN2VMT              the horn2vmt binary          (default: found on PATH)
+    HORN2VMT              the horn2vmt binary          (default: deps/horn2vmt)
     CHC2MOXI_WORK         scratch directory            (default: ./chc2moxi-work)
     CHC2MOXI_BENCHMARKS   MoXI benchmark repository to place tasks into
     MOXICHECKER           moxichecker binary, for spotcheck.py
@@ -24,7 +24,7 @@ MOXI_MC_FLOW = pathlib.Path(
 )
 
 TRANSLATE = MOXI_MC_FLOW / "translate.py"
-HORN2VMT = os.environ.get("HORN2VMT", "horn2vmt")
+HORN2VMT = pathlib.Path(os.environ.get("HORN2VMT") or MOXI_MC_FLOW / "deps" / "horn2vmt")
 
 WORK = pathlib.Path(os.environ.get("CHC2MOXI_WORK", "chc2moxi-work"))
 
