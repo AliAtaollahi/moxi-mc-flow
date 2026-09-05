@@ -1,0 +1,5 @@
+task,form,result,sec
+fib,native-nonlinear,sat,0.03
+fib,stack-encoded-linear,TIMEOUT,300.05
+mc91,native-nonlinear,sat,0.02
+mc91,stack-encoded-linear,TIMEOUT,300.05

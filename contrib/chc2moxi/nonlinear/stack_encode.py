@@ -1,0 +1,362 @@
+#!/usr/bin/env python3
+r"""
+Encode a non-linear (recursive) CHC problem as a MoXI transition system by
+making the call stack an explicit state variable.
+
+This is the textbook pushdown-system -> transition-system construction.  A
+non-linear Horn clause
+
+    P(x1,r1) /\ P(x2,r2) /\ phi  =>  P(x,r)
+
+is a procedure with two recursive calls.  We give the system a program
+counter, an argument register, a temporary register, a return register and
+three arrays holding the saved frames, and we spell out call / return as
+ordinary transitions.  Reachability of the error location in the resulting
+system is equivalent to unsatisfiability of the CHC system, in both
+directions -- nothing is approximated.
+
+The point of the exercise is not that the encoding exists (it plainly does)
+but whether the resulting verification task is within reach of frame-based
+and interpolation-based checkers.  See results/README.md.
+
+Usage:  stack_encode.py <fib|mc91> <out.moxi> [--n0 K] [--prop NAME]
+"""
+import sys
+
+STATE = [
+    ("pc", "Int"), ("sp", "Int"), ("n", "Int"), ("t", "Int"),
+    ("r", "Int"), ("n0", "Int"),
+    ("SN", "(Array Int Int)"), ("ST", "(Array Int Int)"), ("SPC", "(Array Int Int)"),
+]
+NAMES = [v for v, _ in STATE]
+
+# program counters
+ENTRY, RES1, RES2, RET, DONE = 0, 1, 2, 3, 4
+
+
+def frame(**upd):
+    """A transition conjunct: every state variable is primed exactly once.
+
+    Anything not mentioned in `upd` keeps its value.
+    """
+    parts = []
+    for v in NAMES:
+        parts.append("(= %s' %s)" % (v, upd.get(v, v)))
+    return parts
+
+
+def guarded(guard, **upd):
+    return "(and %s %s)" % (guard, " ".join(frame(**upd)))
+
+
+def push(ret_pc, saved_t="t"):
+    """Conjuncts for pushing the current frame with return location `ret_pc`."""
+    return {
+        "SN": "(store SN sp n)",
+        "ST": "(store ST sp %s)" % saved_t,
+        "SPC": "(store SPC sp %d)" % ret_pc,
+        "sp": "(+ sp 1)",
+    }
+
+
+def pop_and_return():
+    """pc = RET, sp > 0: restore the caller's frame, keep r."""
+    return guarded(
+        "(and (= pc %d) (>= sp 1))" % RET,
+        sp="(- sp 1)",
+        n="(select SN (- sp 1))",
+        t="(select ST (- sp 1))",
+        pc="(select SPC (- sp 1))",
+    )
+
+
+def common_tail():
+    return [
+        # top of the stack reached: the answer is in r
+        guarded("(and (= pc %d) (= sp 0))" % RET, pc=str(DONE)),
+        pop_and_return(),
+        # terminal self-loop
+        guarded("(= pc %d)" % DONE),
+    ]
+
+
+def fib_transitions():
+    """fib(0)=0, fib(1)=1, fib(n)=fib(n-1)+fib(n-2)  -- binary recursion."""
+    return [
+        # base case
+        guarded("(and (= pc %d) (<= n 1))" % ENTRY, r="n", pc=str(RET)),
+        # first recursive call: fib(n-1), come back at RES1
+        guarded("(and (= pc %d) (>= n 2))" % ENTRY,
+                pc=str(ENTRY), n="(- n 1)", **push(RES1)),
+        # back from fib(n-1) with the value in r; save it and call fib(n-2)
+        guarded("(= pc %d)" % RES1,
+                pc=str(ENTRY), n="(- n 2)", t="r", **push(RES2, saved_t="r")),
+        # back from fib(n-2): r := fib(n-1) + fib(n-2)
+        guarded("(= pc %d)" % RES2, r="(+ t r)", pc=str(RET)),
+    ] + common_tail()
+
+
+def mc91_transitions():
+    """mc91(n) = n-10 if n>100 else mc91(mc91(n+11))  -- nested recursion."""
+    return [
+        guarded("(and (= pc %d) (> n 100))" % ENTRY, r="(- n 10)", pc=str(RET)),
+        # inner call mc91(n+11), come back at RES1
+        guarded("(and (= pc %d) (<= n 100))" % ENTRY,
+                pc=str(ENTRY), n="(+ n 11)", **push(RES1)),
+        # outer call mc91(r) -- deliberately NOT tail-call optimised, so that
+        # the encoding stays the generic one
+        guarded("(= pc %d)" % RES1, pc=str(ENTRY), n="r", **push(RES2)),
+        guarded("(= pc %d)" % RES2, pc=str(RET)),
+    ] + common_tail()
+
+
+BENCH = {
+    "fib": {
+        "trans": fib_transitions,
+        "init_n": "(>= n0 0)",
+        "props": {
+            "nonneg": "(and (= pc %d) (< r 0))" % DONE,          # SAFE
+            "eq5": "(and (= pc %d) (= r 5))" % DONE,             # REACHABLE when n0=5
+            "eq6": "(and (= pc %d) (= r 6))" % DONE,             # SAFE when n0=5
+        },
+    },
+    "mc91": {
+        "trans": mc91_transitions,
+        "init_n": "true",
+        "props": {
+            "is91": "(and (= pc %d) (<= n0 101) (not (= r 91)))" % DONE,   # SAFE
+            "not91": "(and (= pc %d) (<= n0 101) (= r 91))" % DONE,        # REACHABLE
+        },
+    },
+}
+
+
+def emit(name, out_path, n0=None, prop=None):
+    spec = BENCH[name]
+    prop = prop or list(spec["props"])[0]
+    bad = spec["props"][prop]
+
+    decls = " ".join("(%s %s)" % (v, s) for v, s in STATE)
+    init_n = "(= n0 %d)" % n0 if n0 is not None else spec["init_n"]
+    init = "(and (= pc %d) (= sp 0) (= t 0) (= r 0) (= n n0) %s)" % (ENTRY, init_n)
+    trans = "(or\n      %s)" % "\n      ".join(spec["trans"]())
+
+    sysname = "%s_%s" % (name, prop)
+    text = """(set-logic QF_ALIA)
+
+; generated by stack_encode.py -- explicit-stack encoding of a non-linear
+; (recursive) CHC system.  n0 is the frozen initial argument.
+(define-system {sys}
+   :input ()
+   :output ({decls})
+   :local ()
+   :init {init}
+   :trans {trans}
+   :inv true
+)
+
+(check-system {sys}
+   :input ()
+   :output ({decls})
+   :local ()
+   :reachable (bad {bad})
+   :query (q (bad))
+)
+""".format(sys=sysname, decls=decls, init=init, trans=trans, bad=bad)
+    with open(out_path, "w") as f:
+        f.write(text)
+    return out_path
+
+
+# ---------------------------------------------------------------------------
+# Bit-vector flavour.
+#
+# 'ic3' refuses unbounded-integer state ("needs finite (Bool / BitVec /
+# BV-indexed array) state"), so to give the frame-based engines a fair run we
+# emit the same construction over bit-vectors.  This makes the task finite and
+# therefore decidable, at the price of being faithful only while nothing
+# overflows -- so the initial argument is range-restricted.
+# ---------------------------------------------------------------------------
+
+W = 16      # width of the data registers
+K = 5       # width of the stack index -> 32 frames
+PCW = 3     # width of the program counter
+
+BV_STATE = [
+    ("pc", "(_ BitVec %d)" % PCW), ("sp", "(_ BitVec %d)" % K),
+    ("n", "(_ BitVec %d)" % W), ("t", "(_ BitVec %d)" % W),
+    ("r", "(_ BitVec %d)" % W), ("n0", "(_ BitVec %d)" % W),
+    ("SN", "(Array (_ BitVec %d) (_ BitVec %d))" % (K, W)),
+    ("ST", "(Array (_ BitVec %d) (_ BitVec %d))" % (K, W)),
+    ("SPC", "(Array (_ BitVec %d) (_ BitVec %d))" % (K, PCW)),
+]
+BV_NAMES = [v for v, _ in BV_STATE]
+
+
+def bvw(v, w=W):
+    return "#b" + format(v & ((1 << w) - 1), "0%db" % w)
+
+
+def bframe(**upd):
+    return ["(= %s' %s)" % (v, upd.get(v, v)) for v in BV_NAMES]
+
+
+def bguarded(guard, **upd):
+    return "(and %s %s)" % (guard, " ".join(bframe(**upd)))
+
+
+def bpush(ret_pc, saved_t="t"):
+    return {
+        "SN": "(store SN sp n)",
+        "ST": "(store ST sp %s)" % saved_t,
+        "SPC": "(store SPC sp %s)" % bvw(ret_pc, PCW),
+        "sp": "(bvadd sp %s)" % bvw(1, K),
+    }
+
+
+def bv_common_tail():
+    spm1 = "(bvsub sp %s)" % bvw(1, K)
+    return [
+        bguarded("(and (= pc %s) (= sp %s))" % (bvw(RET, PCW), bvw(0, K)),
+                 pc=bvw(DONE, PCW)),
+        bguarded("(and (= pc %s) (bvuge sp %s))" % (bvw(RET, PCW), bvw(1, K)),
+                 sp=spm1,
+                 n="(select SN %s)" % spm1,
+                 t="(select ST %s)" % spm1,
+                 pc="(select SPC %s)" % spm1),
+        bguarded("(= pc %s)" % bvw(DONE, PCW)),
+    ]
+
+
+def bv_fib_transitions():
+    return [
+        bguarded("(and (= pc %s) (bvsle n %s))" % (bvw(ENTRY, PCW), bvw(1)),
+                 r="n", pc=bvw(RET, PCW)),
+        bguarded("(and (= pc %s) (bvsge n %s))" % (bvw(ENTRY, PCW), bvw(2)),
+                 pc=bvw(ENTRY, PCW), n="(bvsub n %s)" % bvw(1), **bpush(RES1)),
+        bguarded("(= pc %s)" % bvw(RES1, PCW),
+                 pc=bvw(ENTRY, PCW), n="(bvsub n %s)" % bvw(2), t="r",
+                 **bpush(RES2, saved_t="r")),
+        bguarded("(= pc %s)" % bvw(RES2, PCW),
+                 r="(bvadd t r)", pc=bvw(RET, PCW)),
+    ] + bv_common_tail()
+
+
+BV_BENCH = {
+    "bvfib": {
+        "trans": bv_fib_transitions,
+        # 0 <= n0 <= 20 keeps fib(n0) = 6765 inside a signed 16-bit word
+        "init_n": "(and (bvsle %s n0) (bvsle n0 %s))" % (bvw(0), bvw(20)),
+        "props": {
+            "nonneg": "(and (= pc %s) (bvslt r %s))" % (bvw(DONE, PCW), bvw(0)),
+            "eq5": "(and (= pc %s) (= r %s))" % (bvw(DONE, PCW), bvw(5)),
+            "eq6": "(and (= pc %s) (= r %s))" % (bvw(DONE, PCW), bvw(6)),
+        },
+    },
+}
+
+
+def emit_bv(name, out_path, n0=None, prop=None):
+    spec = BV_BENCH[name]
+    prop = prop or list(spec["props"])[0]
+    bad = spec["props"][prop]
+    decls = " ".join("(%s %s)" % (v, s) for v, s in BV_STATE)
+    init_n = "(= n0 %s)" % bvw(n0) if n0 is not None else spec["init_n"]
+    init = "(and (= pc %s) (= sp %s) (= t %s) (= r %s) (= n n0) %s)" % (
+        bvw(ENTRY, PCW), bvw(0, K), bvw(0), bvw(0), init_n)
+    trans = "(or\n      %s)" % "\n      ".join(spec["trans"]())
+    sysname = "%s_%s" % (name, prop)
+    text = """(set-logic QF_ABV)
+
+; generated by stack_encode.py --bv : the same explicit-stack encoding over
+; bit-vectors, so that the finite-state engines ('ic3') can run on it.
+(define-system {sys}
+   :input ()
+   :output ({decls})
+   :local ()
+   :init {init}
+   :trans {trans}
+   :inv true
+)
+
+(check-system {sys}
+   :input ()
+   :output ({decls})
+   :local ()
+   :reachable (bad {bad})
+   :query (q (bad))
+)
+""".format(sys=sysname, decls=decls, init=init, trans=trans, bad=bad)
+    with open(out_path, "w") as f:
+        f.write(text)
+    return out_path
+
+
+# ---------------------------------------------------------------------------
+# The same stack-encoded transition system, written back out as LINEAR CHC.
+#
+# This is the control that separates "MoXIchecker cannot do it" from "the
+# encoding is the problem".  The transition system below is exactly what the
+# MoXI file describes, so if a mature CHC engine (Spacer) also fails on it
+# while solving the original non-linear CHC in milliseconds, then what the
+# encoding destroyed is the problem structure, not the tool.
+# ---------------------------------------------------------------------------
+
+CHC_SORT = {"Int": "Int", "(Array Int Int)": "(Array Int Int)"}
+
+
+def _prime_to_p(text):
+    out = text
+    for v in sorted(NAMES, key=len, reverse=True):
+        out = out.replace(v + "'", v + "_p")
+    return out
+
+
+def emit_chc(name, out_path, n0=None, prop=None):
+    spec = BENCH[name]
+    prop = prop or list(spec["props"])[0]
+    bad = spec["props"][prop]
+    sorts = [srt for _, srt in STATE]
+    rel = " ".join(sorts)
+    cur = " ".join(NAMES)
+    nxt = " ".join(v + "_p" for v in NAMES)
+    qcur = " ".join("(%s %s)" % (v, srt) for v, srt in STATE)
+    qnxt = " ".join("(%s_p %s)" % (v, srt) for v, srt in STATE)
+
+    init_n = "(= n0 %d)" % n0 if n0 is not None else spec["init_n"]
+    init = "(and (= pc %d) (= sp 0) (= t 0) (= r 0) (= n n0) %s)" % (ENTRY, init_n)
+
+    lines = ["(set-logic HORN)",
+             "; linear CHC form of the explicit-stack encoding -- generated by stack_encode.py",
+             "(declare-fun Inv (%s) Bool)" % rel,
+             "(assert (forall (%s) (=> %s (Inv %s))))" % (qcur, init, cur)]
+    for disj in spec["trans"]():
+        lines.append("(assert (forall (%s %s) (=> (and (Inv %s) %s) (Inv %s))))"
+                     % (qcur, qnxt, cur, _prime_to_p(disj), nxt))
+    lines.append("(assert (forall (%s) (=> (and (Inv %s) %s) false)))"
+                 % (qcur, cur, bad))
+    lines.append("(check-sat)")
+    with open(out_path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    return out_path
+
+
+if __name__ == "__main__":
+    args = sys.argv[1:]
+    name, out = args[0], args[1]
+    n0 = prop = None
+    i = 2
+    while i < len(args):
+        if args[i] == "--n0":
+            n0 = int(args[i + 1]); i += 2
+        elif args[i] == "--prop":
+            prop = args[i + 1]; i += 2
+        else:
+            raise SystemExit("unknown arg %s" % args[i])
+    if out.endswith('.chc.smt2'):
+        fn = emit_chc
+    elif name in BV_BENCH:
+        fn = emit_bv
+    else:
+        fn = emit
+    print(fn(name, out, n0, prop))

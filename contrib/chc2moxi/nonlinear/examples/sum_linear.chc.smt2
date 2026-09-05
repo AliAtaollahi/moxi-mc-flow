@@ -1,0 +1,10 @@
+; CONTROL: single recursive call -> LINEAR CHC. horn2vmt should accept this.
+;   sum(0)=0, sum(n)=n+sum(n-1)
+; property: n >= 0 => sum(n) >= 0   (SAFE)
+(set-logic HORN)
+(declare-fun sum (Int Int) Bool)
+(assert (forall ((n Int) (r Int)) (=> (and (= n 0) (= r 0)) (sum n r))))
+(assert (forall ((n Int) (r Int) (r1 Int))
+  (=> (and (>= n 1) (sum (- n 1) r1) (= r (+ n r1))) (sum n r))))
+(assert (forall ((n Int) (r Int)) (=> (and (sum n r) (>= n 0) (< r 0)) false)))
+(check-sat)
