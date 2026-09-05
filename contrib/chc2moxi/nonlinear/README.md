@@ -145,3 +145,14 @@ measurements below used 300 s wall-clock per run.
 Raw data: `measurements/all_runs.csv` and `measurements/spacer.csv`. The
 per-run logs behind them are not committed -- they are bulk output, and the
 csv files carry every number quoted here.
+
+## The harness behind these numbers
+
+`eval/run_eval*.sh` are the drivers that produced `measurements/`. They run
+MoXIchecker over the encoded models at a 300 s budget and write one csv each.
+They need `MOXICHECKER` pointing at a binary, and the runs that use bitwuzla or
+SMTInterpol also need `MOXICHECKER_PYSMT_PATH` pointing at a pySMT checkout
+carrying those solvers.
+
+They are kept so the measurements can be re-derived rather than taken on
+trust. They are evaluation scripts, not part of the translation.
