@@ -9,6 +9,8 @@ Context: 9272 CHC source files went through
 `preprocess_chc -> horn2vmt -> preprocess_vmt -> vmt2moxi --with-lets -> sortcheck`,
 which is what `translate.py <file>.smt2 moxi --with-lets` now runs.
 8965 translated; after collapsing byte-identical models, 5474 tasks remain.
+Section 10 records the re-run that confirms the current code still produces
+exactly those 5474 models.
 
 ---
 
@@ -191,14 +193,84 @@ Not tooling bugs; worth reporting to the competition organisers.
 The competition republishes the same benchmarks year after year, re-formatted,
 so source hashes miss the re-use but the translated models do not. Of 8965
 translated models, **3491 were byte-identical to another one**. CHC-COMP 2021's
-LRA-TS track is all 468 models of the 2020 set verbatim.
+LRA-TS track is all 468 models of the 2020 set verbatim. The re-run in section
+10 reproduces the same picture from a different starting point: 8924 models,
+3450 of them duplicates of a model already kept.
 
 Any count taken before collapsing duplicates roughly doubles the apparent size
 of the set. Collapse first, then count.
 
 ---
 
-## 9. Open questions
+## 9. What the benchmark gained
+
+Per logic, counting only the models actually placed under
+`benchmarks/<LOGIC>/moxi/chc-comp<YY>/` after duplicates were collapsed:
+
+| logic | before CHC | added from CHC | after | growth |
+|---|---:|---:|---:|---:|
+| QF_LIA | 1023 | 2698 | 3721 | +264 % |
+| QF_LRA | 1020 | 1137 | 2157 | +111 % |
+| QF_BV | 915 | 451 | 1366 | +49 % |
+| QF_ALIA | 0 | 884 | 884 | new logic |
+| QF_NIA | 0 | 297 | 297 | new logic |
+| QF_NRA | 0 | 7 | 7 | new logic |
+| QF_ABV | 45 | 0 | 45 | — |
+| **total** | **3003** | **5474** | **8477** | **+182 %** |
+
+Three logics had no benchmark at all before this work. QF_ALIA is the one that
+needed a code change to be representable (section 1); the other two only needed
+the logic inference in `src/chc2moxi.py` to pick them.
+
+The `QF_NIA` and `QF_NRA` counts are *not* non-linear CHC — those are refused
+outright (section 10). They are linear Horn problems whose transition relation
+multiplies two state variables, or applies `div`/`mod`/`abs`, after
+`horn2vmt` has done its encoding. `src/chc2moxi.py` walks the logic ladder
+`QF_LIA -> QF_NIA` / `QF_LRA -> QF_NRA` and keeps the first name that
+sort-checks, so the promotion is decided by the model, not guessed from the
+source track.
+
+---
+
+## 10. Re-running the whole set against the restructured code
+
+After the translation was moved out of `contrib/` and into `src/chc2moxi.py`,
+`src/preprocess_chc.py` and `src/preprocess_vmt.py`, all 9272 sources were put
+through the new code from scratch to prove the restructuring changed no output.
+
+| check | result |
+|---|---|
+| placed benchmark models re-translated | 5474 |
+| byte-identical | 5437 |
+| differing | **0** |
+| inferred logic differing (wrong directory) | **0** |
+| not reproduced | 37, all `timeout`, none a translation failure |
+
+The 37 are large LIA-lin and BV sources that finished in the original pass and
+exceeded the 900 s budget in the re-run, which shared a 220-core machine
+running at load 178. Nothing about them is a regression, and their models are
+already in the benchmark.
+
+The re-run also produced 3450 models beyond the placed 5474. Every one hashes
+identically to a model already in the benchmark, so the placed set is complete:
+no source that translates has been left out.
+
+**What does not translate: 348 of 9272 (3.8 %).**
+
+| status | n | reason |
+|---|---:|---|
+| `nonlinear` | 142 | non-unary clause; `horn2vmt` is linear-only and these are out of scope |
+| `timeout` | 158 | size, not difficulty — see section 11 |
+| `horn2vmt-fail` | 11 | 8 use Z3 internals, 3 are not SMT-LIB files at all (section 7) |
+
+Reproduce with `contrib/chc2moxi/translate_one.py`; `SKIP_JSON=1` is right for
+this benchmark, which stores no `.json` for CHC tasks, and it removes the most
+expensive stage. The whole set costs about 80 CPU-hours at
+`CHC2MOXI_TIMEOUT=900`.
+
+---
+
+## 11. Open questions
 
 * Should `QF_ALIA` here be the strict linear SMT-LIB reading, with a new
   `QF_ANIA` added to both this table and MoXIchecker's `INT_LOGIC` for the
@@ -207,6 +279,7 @@ of the set. Collapse first, then count.
 * `QF_AUFLIA` is accepted by MoXIchecker but absent from `LOGIC_TABLE`.
 * The 7 pre-existing `vmt2moxi.json` test failures — unexamined, unrelated to
   this change, but they mean that suite is not a clean baseline.
-* 154 CHC files remain untranslated purely on time (median source 2.1 MB
-  gzipped, up to 58 MB, against 1.7 KB for what succeeded). Recoverable with a
-  much larger budget; nothing is wrong with them.
+* 158 CHC files remain untranslated purely on time (median source 12 MB
+  uncompressed, up to 286 MB; none is under 1 MB, against 1.7 KB for the median
+  file that succeeded). Recoverable with a much larger budget on a quiet
+  machine; nothing is wrong with them. See section 10.
