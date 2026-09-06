@@ -202,33 +202,64 @@ of the set. Collapse first, then count.
 
 ---
 
-## 9. What the benchmark gained
+## 9. What the fixes bought
 
-Per logic, counting only the models actually placed under
-`benchmarks/<LOGIC>/moxi/chc-comp<YY>/` after duplicates were collapsed:
+The first pass over all 9272 sources, before any of the work in sections 1-6,
+translated 5337 of them. The same 9272 through the current code translate 8924.
+Per logic, counting unique models with byte-identical duplicates collapsed:
 
-| logic | before CHC | added from CHC | after | growth |
-|---|---:|---:|---:|---:|
-| QF_LIA | 1023 | 2698 | 3721 | +264 % |
-| QF_LRA | 1020 | 1137 | 2157 | +111 % |
-| QF_BV | 915 | 451 | 1366 | +49 % |
-| QF_ALIA | 0 | 884 | 884 | new logic |
-| QF_NIA | 0 | 297 | 297 | new logic |
-| QF_NRA | 0 | 7 | 7 | new logic |
-| QF_ABV | 45 | 0 | 45 | — |
-| **total** | **3003** | **5474** | **8477** | **+182 %** |
+| logic | before the fixes | after | gain |
+|---|---:|---:|---:|
+| QF_LIA | 2408 | 2683 | +275 |
+| QF_LRA | 982 | 1137 | +155 |
+| QF_ALIA | 0 | 884 | **+884** |
+| QF_NIA | 3 | 282 | **+279** |
+| QF_BV | 293 | 444 | +151 |
+| QF_NRA | 7 | 7 | 0 |
+| **total** | **3693** | **5437** | **+1744** |
 
-Three logics had no benchmark at all before this work. QF_ALIA is the one that
-needed a code change to be representable (section 1); the other two only needed
-the logic inference in `src/chc2moxi.py` to pick them.
+**Nothing regressed: all 5337 that translated before still translate.**
 
-The `QF_NIA` and `QF_NRA` counts are *not* non-linear CHC — those are refused
-outright (section 10). They are linear Horn problems whose transition relation
-multiplies two state variables, or applies `div`/`mod`/`abs`, after
-`horn2vmt` has done its encoding. `src/chc2moxi.py` walks the logic ladder
-`QF_LIA -> QF_NIA` / `QF_LRA -> QF_NRA` and keeps the first name that
-sort-checks, so the promotion is decided by the model, not guessed from the
-source track.
+Which fix bought what, by the status the first pass gave each file:
+
+| first pass said | n | now translates | what fixed it |
+|---|---:|---:|---|
+| `sortcheck-fail` | 2973 | **2973** | `restore_int_div` (section 3) and QF_ALIA (section 1) |
+| `json-fail` | 507 | **507** | `moxi2json` on a big-stack thread, and keeping the `.moxi` when the `.json` cannot be built (section 6) |
+| `horn2vmt-fail` | 74 | 57 | head normalisation on retry (section 5) |
+| `vmt2moxi-fail` | 10 | 10 | `--with-lets` (section 2) |
+| `horn2vmt-timeout` | 117 | 26 | budget only |
+| `vmt2moxi-timeout` | 118 | 14 | budget only |
+| `nonlinear` | 136 | 0 | out of scope by design |
+
+The two structural fixes account for almost all of it. The 2973 sort-check
+failures split by the logic they end up in: 2446 QF_ALIA, 406 QF_NIA, 121
+QF_LRA — that is, the array models the `LOGIC_TABLE` could not name, plus the
+`div`/`mod` models MathSAT had re-encoded through the reals.
+
+`QF_NIA` and `QF_NRA` here are *not* non-linear CHC, which is refused outright.
+They are linear Horn problems whose transition relation multiplies two state
+variables, or applies `div`/`mod`/`abs`, after `horn2vmt`'s encoding.
+`src/chc2moxi.py` walks the ladder `QF_LIA -> QF_NIA` / `QF_LRA -> QF_NRA` and
+keeps the first name that sort-checks, so the promotion is decided by the
+model, not guessed from the source track.
+
+### What the benchmark gained
+
+After placement, per logic (`benchmarks/<LOGIC>/moxi/chc-comp<YY>/`):
+
+| logic | before CHC | added from CHC | after |
+|---|---:|---:|---:|
+| QF_LIA | 1023 | 2698 | 3721 |
+| QF_LRA | 1020 | 1137 | 2157 |
+| QF_BV | 915 | 451 | 1366 |
+| QF_ALIA | 0 | 884 | 884 |
+| QF_NIA | 0 | 297 | 297 |
+| QF_NRA | 0 | 7 | 7 |
+| QF_ABV | 45 | 0 | 45 |
+| **total** | **3003** | **5474** | **8477** |
+
+Three logics had no benchmark at all before this work.
 
 ---
 
