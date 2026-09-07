@@ -43,8 +43,27 @@ input_files: '%s'
 
 properties:
   - property_file: ../../../properties/unreach-query.prp
-    expected_verdict: %s
 """
+
+# Appended only for a task whose verdict is actually known.  BenchExec's
+# task-definition format makes `expected_verdict` optional, and a property
+# entry without one is the `unknown` case: the task is run but not scored.
+YML_VERDICT = "    expected_verdict: %s\n"
+
+
+def yml_text(input_files, verdict):
+    """The task definition for one model.
+
+    A verdict of anything but "true"/"false" means nobody knows the answer, and
+    the key is left out entirely rather than guessed.  Writing `true` there --
+    "no tool has shown a violation yet" -- would make BenchExec score thousands
+    of tasks against invented ground truth, and every tool error on one of them
+    would be reported as a wrong answer, burying the real ones.
+    """
+    out = YML % input_files
+    if verdict in ("true", "false"):
+        out += YML_VERDICT % verdict
+    return out
 
 
 def load_meta():
@@ -102,11 +121,6 @@ def main():
         year = int(m["year"])
         setname = "chc-comp%02d" % year
         verdict = m["verdict"]
-        # The repository's documented rule: a task with no known verdict is
-        # written as `true`, because no tool has yet shown a violation.  The
-        # honest state stays in verdict.csv and in the manifest.
-        yml_verdict = "false" if verdict == "false" else "true"
-
         src_moxi = SP / "out" / logic / (task + ".moxi")
         src_json = SP / "out" / logic / (task + ".json")
         if not src_moxi.exists() or (args.with_json and not src_json.exists()):
@@ -124,7 +138,7 @@ def main():
             for d, name, src in targets:
                 d.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, d / name)
-                (d / (task + ".yml")).write_text(YML % (name, yml_verdict))
+                (d / (task + ".yml")).write_text(yml_text(name, verdict))
         placed.append((logic, setname, task, verdict))
         manifest.append({
             "task": task, "logic": logic, "set": setname,

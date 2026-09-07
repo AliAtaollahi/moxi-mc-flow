@@ -58,8 +58,27 @@ input_files: '%s'
 
 properties:
   - property_file: ../../../properties/unreach-query.prp
-    expected_verdict: %s
 """
+
+# Appended only for a task whose verdict is actually known.  BenchExec's
+# task-definition format makes `expected_verdict` optional, and a property
+# entry without one is the `unknown` case: the task is run but not scored.
+YML_VERDICT = "    expected_verdict: %s\n"
+
+
+def yml_text(input_files, verdict):
+    """The task definition for one model.
+
+    A verdict of anything but "true"/"false" means nobody knows the answer, and
+    the key is left out entirely rather than guessed.  Writing `true` there --
+    "no tool has shown a violation yet" -- would make BenchExec score thousands
+    of tasks against invented ground truth, and every tool error on one of them
+    would be reported as a wrong answer, burying the real ones.
+    """
+    out = YML % input_files
+    if verdict in ("true", "false"):
+        out += YML_VERDICT % verdict
+    return out
 
 
 def md5(path):
@@ -122,14 +141,11 @@ def main():
         logic, m = res["logic"], meta[task]
         year = int(m["year"])
         setname = "chc-comp%02d" % year
-        # The repository's documented rule: a task with no known verdict is
-        # written as `true`, because no tool has yet shown a violation.
-        yml_verdict = "false" if m["verdict"] == "false" else "true"
         d = DEST / logic / "moxi" / setname
         if args.apply:
             d.mkdir(parents=True, exist_ok=True)
             shutil.copy2(SRC / logic / (task + ".moxi"), d / (task + ".moxi"))
-            (d / (task + ".yml")).write_text(YML % (task + ".moxi", yml_verdict))
+            (d / (task + ".yml")).write_text(yml_text(task + ".moxi", m["verdict"]))
         placed.append((logic, setname, task, m["verdict"]))
         verdict_rows.setdefault(logic, []).append(("%s/%s" % (setname, task), m["verdict"]))
         manifest_rows.append({
