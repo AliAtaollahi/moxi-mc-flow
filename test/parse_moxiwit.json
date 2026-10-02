@@ -1,0 +1,21 @@
+{
+    "script": "../src/parse_moxiwit.py",
+    "tests": [
+        {
+            "input": "moxiwit/certificate-inductive.mxw",
+            "output": "moxiwit/certificate-inductive.mxw"
+        },
+        {
+            "input": "moxiwit/certificate-k-inductive.mxw",
+            "output": "moxiwit/certificate-k-inductive.mxw"
+        },
+        {
+            "input": "moxiwit/certificate-aux-define.mxw",
+            "output": "moxiwit/certificate-aux-define.mxw"
+        },
+        {
+            "input": "moxiwit/trail-counter.mxw",
+            "output": "moxiwit/trail-counter.mxw"
+        }
+    ]
+}

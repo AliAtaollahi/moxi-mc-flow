@@ -1,0 +1,23 @@
+{
+    "script": "../src/chcsol2moxicert.py",
+    "options": [
+        "--system",
+        "main",
+        "--query",
+        "q"
+    ],
+    "tests": [
+        {
+            "input": "chcsol/golem-counter.sol",
+            "output": "chcsol/golem-counter.mxw"
+        },
+        {
+            "input": "chcsol/eldarica-counter.sol",
+            "output": "chcsol/eldarica-counter.mxw"
+        },
+        {
+            "input": "chcsol/z3-spacer-counter.sol",
+            "output": "chcsol/z3-spacer-counter.mxw"
+        }
+    ]
+}

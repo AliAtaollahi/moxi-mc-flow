@@ -1,0 +1,5 @@
+(check-system-response CounterReset
+:query (q :result unsat :certificate q_cert)
+:certificate (q_cert :kind inductive :k 1 :simple-path false
+	(let ((.def_0 (< n 0))) (let ((.def_1 (not .def_0))) .def_1)))
+)

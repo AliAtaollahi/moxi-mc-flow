@@ -10,10 +10,96 @@ class QueryResult(Enum):
     UNSAT = "unsat"
 
 
-class Certificate:
-    def __init__(self, symbol: str) -> None:
+class Definition:
+    """One named piece of a certificate, shaped like SMT-LIB's `define-fun`.
+
+    A CHC solver answers `sat` with a model: one `define-fun` per uninterpreted
+    predicate. Keeping that shape means such a solution is transcribed into a
+    certificate rather than rewritten.
+    """
+
+    def __init__(
+        self, symbol: str, args: list[tuple[str, moxi.Sort]], sort: moxi.Sort,
+        body: moxi.Term,
+    ) -> None:
         self.symbol = symbol
-        # TODO
+        self.args = args
+        self.sort = sort
+        self.body = body
+
+    def __str__(self) -> str:
+        args = " ".join([f"({n} {s})" for n, s in self.args])
+        return f"({self.symbol} ({args}) {self.sort} {self.body})"
+
+
+class Certificate:
+    """Why a query is unreachable: an invariant the checker can verify itself.
+
+    MoXI reserves `:certificate` on a query response but says nothing about what
+    it holds. This is that content:
+
+        :certificate (name :kind <kind> :k <N> :simple-path <bool>
+            [:aux ((v sort) ...)]
+            [:define ((p (args) sort body) ...)]
+            <formula>)
+
+    `formula` is an invariant over the system's variables. Three conditions make
+    it a proof, and the attributes say which form each takes:
+
+    * initiation  -- it holds on every path of fewer than `k` steps from an
+      initial state;
+    * consecution -- `k` consecutive states satisfying it are followed by one
+      that does, and with `simple_path` those `k` states may be assumed pairwise
+      distinct, which is sound because a shortest violating run repeats no
+      state;
+    * safety      -- it excludes every state that satisfies the query.
+
+    `kind` is `inductive` when `k` is 1 and `k-inductive` otherwise; it carries
+    no information a checker needs, and is there so a reader need not decode the
+    number.
+
+    The two optional parts are what let other tools' certificates arrive here
+    unchanged. `define` holds named pieces in `define-fun` shape, which is how
+    every CHC solver prints a solution and how a per-subsystem invariant would
+    be written. `aux` declares state of the certificate's own, which is what a
+    hardware-style witness circuit needs and what no formula over the original
+    variables can express.
+    """
+
+    def __init__(
+        self,
+        symbol: str,
+        formula: Optional[moxi.Term] = None,
+        k: int = 1,
+        simple_path: bool = False,
+        aux: Optional[list[tuple[str, moxi.Sort]]] = None,
+        definitions: Optional[list[Definition]] = None,
+    ) -> None:
+        self.symbol = symbol
+        self.formula = formula
+        self.k = k
+        self.simple_path = simple_path
+        self.aux = aux or []
+        self.definitions = definitions or []
+
+    @property
+    def kind(self) -> str:
+        return "inductive" if self.k == 1 else "k-inductive"
+
+    def __str__(self) -> str:
+        if self.formula is None:  # nothing to say beyond the name
+            return f"({self.symbol})"
+        s = (
+            f"({self.symbol} :kind {self.kind} :k {self.k} "
+            f":simple-path {str(self.simple_path).lower()}"
+        )
+        if self.aux:
+            decls = " ".join([f"({n} {srt})" for n, srt in self.aux])
+            s += "\n\t:aux (" + decls + ")"
+        if self.definitions:
+            defs = " ".join([str(d) for d in self.definitions])
+            s += "\n\t:define (" + defs + ")"
+        return s + "\n\t" + str(self.formula) + ")"
 
 
 class Model:
@@ -54,7 +140,7 @@ class Trail:
         self.states = states
 
     def __str__(self) -> str:
-        return f"({self.symbol} \n\t" + "\n\t".join([str(s) for s in self.states]) + ")"
+        return f"({self.symbol}\n\t" + "\n\t".join([str(s) for s in self.states]) + ")"
 
 
 class Trace:
