@@ -1,0 +1,14 @@
+(set-logic QF_LRA)
+(define-system main 
+   :input () 
+   :output ((XXX0 Real) (gh0 Real)) 
+   :local () 
+   :init (let ((.def_10 gh0)) (let ((.def_8 XXX0)) (let ((.def_30 (+ .def_8 .def_10))) (let ((.def_35 (<= .def_30 1.0))) (let ((.def_36 (not .def_35))) (let ((.def_33 (<= .def_10 10.0))) (let ((.def_34 (not .def_33))) (let ((.def_37 (and .def_34 .def_36))) (let ((.def_31 (<= .def_30 0.0))) (let ((.def_32 (not .def_31))) (let ((.def_38 (and .def_32 .def_37))) (let ((.def_28 (<= .def_10 .def_8))) (let ((.def_29 (not .def_28))) (and .def_29 .def_38)))))))))))))) 
+   :trans (let ((.def_8 XXX0)) (let ((.def_25 (= .def_8 0.0))) (let ((.def_26 (not .def_25))) (let ((.def_17 (+ .def_8 1.0))) (let ((.def_19 (<= 10.0 .def_8))) (let ((.def_20 (not .def_19))) (let ((.def_21 (ite .def_20 .def_17 (- 1.0)))) (let ((.def_22 (= XXX0' .def_21))) (let ((.def_14 (* (- 1.0) gh0'))) (let ((.def_10 gh0)) (let ((.def_15 (+ .def_10 .def_14))) (let ((.def_16 (= .def_15 1.0))) (let ((.def_23 (and .def_16 .def_22))) (and .def_23 .def_26)))))))))))))) 
+   :inv true )
+(check-system main 
+   :input () 
+   :output ((XXX0 Real) (gh0 Real)) 
+   :local () 
+   :reachable (rch_0 (not (let ((.def_10 gh0)) (let ((.def_40 (<= 0.0 .def_10))) (let ((.def_41 (not .def_40))) (let ((.def_8 XXX0)) (let ((.def_25 (= .def_8 0.0))) (let ((.def_26 (not .def_25))) (let ((.def_42 (and .def_26 .def_41))) (not .def_42))))))))))
+   :query (qry_rch_0 (rch_0)))

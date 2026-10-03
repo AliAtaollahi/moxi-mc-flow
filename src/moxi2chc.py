@@ -138,8 +138,6 @@ def clauses(
     """The task as a set of Horn clauses over one predicate."""
     system = define_system(text)
     variables = system["variables"]
-    if not variables:
-        raise TranslationError("the system declares no variables")
     declared = moxi_task.declared_variables(text)
     if [n for n, _ in declared] != [n for n, _ in variables]:
         raise TranslationError(
@@ -192,19 +190,27 @@ def clauses(
     invariant = system["inv"]
     invariant_next = substituted(invariant, shift)
 
+    # A system with no state is still a Horn problem, with a nullary
+    # predicate -- but SMT-LIB has no `forall` over nothing, so the quantifier
+    # goes away with the variables.
+    use = f"({predicate} {here})" if names else predicate
+    use_next = f"({predicate} {there})" if names else predicate
+    def quantified(body: str, bind: str) -> str:
+        return f"(assert (forall ({bind})\n  {body}))" if bind.strip() \
+            else f"(assert {body})"
+
     out = [
         ";; Written by moxi2chc from a MoXI task: one predicate over the",
         f";; variables of system '{system['name']}', asking query '{query}'.",
         "(set-logic HORN)",
         f"(declare-fun {predicate} ({sorts}) Bool)",
-        f"(assert (forall ({binder})",
-        f"  (=> (and {invariant} {system['init']}) ({predicate} {here}))))",
-        f"(assert (forall ({binder} {binder_next})",
-        f"  (=> (and ({predicate} {here}) {invariant} {invariant_next} "
-        f"{substituted(system['trans'], unprime)})",
-        f"      ({predicate} {there}))))",
-        f"(assert (forall ({binder})",
-        f"  (=> (and ({predicate} {here}) {invariant} {condition}) false)))",
+        quantified(f"(=> (and {invariant} {system['init']}) {use})", binder),
+        quantified(
+            f"(=> (and {use} {invariant} {invariant_next} "
+            f"{substituted(system['trans'], unprime)})\n      {use_next})",
+            f"{binder} {binder_next}",
+        ),
+        quantified(f"(=> (and {use} {invariant} {condition}) false)", binder),
         "(check-sat)",
     ]
     return "\n".join(out) + "\n"

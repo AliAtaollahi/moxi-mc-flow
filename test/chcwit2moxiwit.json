@@ -84,6 +84,48 @@
                     "chcsol/eldarica-counter-cex.mxw"
                 ]
             ]
+        },
+        {
+            "input": "chcsol/eldarica-lrats-cex.sol",
+            "options": [
+                "--task",
+                "chcsol/lrats.moxi"
+            ],
+            "output": "chcsol/eldarica-lrats-cex.mxw",
+            "expected_output": [
+                [
+                    "chcsol/eldarica-lrats-cex.mxw.expect",
+                    "chcsol/eldarica-lrats-cex.mxw"
+                ]
+            ]
+        },
+        {
+            "input": "chcsol/eldarica-arr-cex.sol",
+            "options": [
+                "--task",
+                "chcsol/arr.moxi"
+            ],
+            "output": "chcsol/eldarica-arr-cex.mxw",
+            "expected_output": [
+                [
+                    "chcsol/eldarica-arr-cex.mxw.expect",
+                    "chcsol/eldarica-arr-cex.mxw"
+                ]
+            ]
+        },
+        {
+            "input": "chcsol/eldarica-bv-cex.sol",
+            "options": [
+                "--task",
+                "chcsol/bv.moxi"
+            ],
+            "output": "chcsol/eldarica-bv-cex.mxw",
+            "expected_output": [
+                [
+                    "chcsol/eldarica-bv-cex.mxw.expect",
+                    "chcsol/eldarica-bv-cex.mxw"
+                ]
+            ]
         }
     ]
 }

@@ -1,0 +1,14 @@
+(set-logic QF_ALIA)
+(define-system main 
+   :input () 
+   :output ((a_0 (Array Int Int)) (i Int) (j_0 Int) (i1_0 Int)) 
+   :local () 
+   :init (let ((.def_12 j_0)) (let ((.def_10 i)) (= .def_10 .def_12))) 
+   :trans (let ((.def_8 a_0)) (let ((.def_10 i)) (let ((.def_19 (select .def_8 .def_10))) (let ((.def_12 j_0)) (let ((.def_20 (select .def_8 .def_12))) (let ((.def_21 (store .def_8 .def_10 .def_20))) (let ((.def_22 (store .def_21 .def_12 .def_19))) (let ((.def_23 (<= .def_20 .def_19))) (let ((.def_24 (not .def_23))) (let ((.def_25 (ite .def_24 .def_22 .def_8))) (let ((.def_26 (= a_0' .def_25))) (let ((.def_16 (* (- 1) i'))) (let ((.def_17 (+ .def_10 .def_16))) (let ((.def_18 (= .def_17 (- 1)))) (let ((.def_27 (and .def_18 .def_26))) (let ((.def_14 (= .def_12 j_0'))) (and .def_14 .def_27))))))))))))))))) 
+   :inv true )
+(check-system main 
+   :input () 
+   :output ((a_0 (Array Int Int)) (i Int) (j_0 Int) (i1_0 Int)) 
+   :local () 
+   :reachable (rch_0 (not (let ((.def_30 i1_0)) (let ((.def_10 i)) (let ((.def_35 (<= .def_10 .def_30))) (let ((.def_36 (not .def_35))) (let ((.def_12 j_0)) (let ((.def_33 (<= .def_30 .def_12))) (let ((.def_34 (not .def_33))) (let ((.def_37 (and .def_34 .def_36))) (let ((.def_8 a_0)) (let ((.def_20 (select .def_8 .def_12))) (let ((.def_31 (select .def_8 .def_30))) (let ((.def_32 (<= .def_31 .def_20))) (let ((.def_38 (and .def_32 .def_37))) (not .def_38))))))))))))))))
+   :query (qry_rch_0 (rch_0)))

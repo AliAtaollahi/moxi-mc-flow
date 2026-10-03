@@ -1,0 +1,14 @@
+(set-logic QF_BV)
+(define-system main 
+   :input () 
+   :output ((N (_ BitVec 32)) (M (_ BitVec 32))) 
+   :local () 
+   :init true 
+   :trans false 
+   :inv true )
+(check-system main 
+   :input () 
+   :output ((N (_ BitVec 32)) (M (_ BitVec 32))) 
+   :local () 
+   :reachable (rch_0 (not (let ((.def_9 M)) (let ((.def_8 N)) (let ((.def_10 (= .def_8 .def_9))) (not .def_10))))))
+   :query (qry_rch_0 (rch_0)))

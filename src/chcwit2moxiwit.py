@@ -242,7 +242,7 @@ def _values(fact: str) -> Optional[list[str]]:
         current.append(c)
     if "".join(current).strip():
         out.append("".join(current).strip())
-    return [f"(- {v[1:]})" if re.fullmatch(r"-\d+", v) else v for v in out]
+    return out
 
 
 def derivation(text: str) -> list[list[str]]:
@@ -270,22 +270,107 @@ def derivation(text: str) -> list[list[str]]:
     return [values for _, values in facts]
 
 
-def trail(
-    text: str, query: str, task_text: str
-) -> moxi_witness.Trail:
+# Eldarica writes the values in a derivation in its own term language, not in
+# SMT-LIB: `store(const(4), 2, 1)` for an array, `Rat_frac(5, 2)` for a
+# rational, `mod_cast(0, 4294967295, v)` for a machine integer. Golem writes
+# SMT-LIB. Both are read, because a trail whose values a checker cannot parse
+# is not a witness.
+_APPLICATION = re.compile(r"([A-Za-z_][\w.]*)\s*\((.*)\)\s*$", re.S)
+
+
+def _arguments(text: str) -> list[str]:
+    """The comma-separated arguments of an application, nesting respected."""
+    out, depth, current = [], 0, []
+    for c in text:
+        if c == "," and depth == 0:
+            out.append("".join(current).strip())
+            current = []
+            continue
+        if c in "([":
+            depth += 1
+        elif c in ")]":
+            depth -= 1
+        current.append(c)
+    if "".join(current).strip():
+        out.append("".join(current).strip())
+    return out
+
+
+def _numeral(text: str) -> Optional[int]:
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+def value(raw: str, sort: str) -> str:
+    """One value of a derivation, in SMT-LIB, at the sort the task declares."""
+    raw = raw.strip()
+    number = _numeral(raw)
+    if number is not None:
+        if sort.startswith("(") and "BitVec" in sort:
+            width = parse_moxiwit._items(sort)[-1]
+            return f"(_ bv{number % (2 ** int(width))} {width})"
+        if sort == "Real":
+            return f"(- {abs(number)}.0)" if number < 0 else f"{number}.0"
+        return f"(- {abs(number)})" if number < 0 else raw
+    if raw.startswith("(") or raw in ("true", "false"):
+        return raw  # already SMT-LIB, which is how Golem writes it
+    match = _APPLICATION.match(raw)
+    if match is None:
+        raise SolutionError(f"'{raw[:60]}' is not a value this can read")
+    name, arguments = match.group(1), _arguments(match.group(2))
+    if name == "store" and len(arguments) == 3:
+        parts = parse_moxiwit._items(sort)
+        if len(parts) != 3 or parts[0] != "Array":
+            raise SolutionError(f"'store' at sort {sort}, which is not an array")
+        return (
+            f"(store {value(arguments[0], sort)} "
+            f"{value(arguments[1], parts[1])} {value(arguments[2], parts[2])})"
+        )
+    if name == "const" and len(arguments) == 1:
+        parts = parse_moxiwit._items(sort)
+        if len(parts) != 3 or parts[0] != "Array":
+            raise SolutionError(f"'const' at sort {sort}, which is not an array")
+        return f"((as const {sort}) {value(arguments[0], parts[2])})"
+    if name == "Rat_frac" and len(arguments) == 2:
+        top, bottom = (_numeral(a) for a in arguments)
+        if top is None or bottom is None:
+            raise SolutionError(f"'{raw[:60]}' is not a rational")
+        if bottom == 1:
+            return value(str(top), sort)
+        return f"(/ {value(str(top), 'Real')} {value(str(bottom), 'Real')})"
+    if name == "mod_cast" and len(arguments) == 3:
+        # Eldarica's cast of a value into the range [lo, hi].
+        low, high, inner = (_numeral(a) for a in arguments)
+        if None in (low, high, inner):
+            raise SolutionError(f"'{raw[:60]}' is not a cast of a literal")
+        span = high - low + 1
+        return value(str(low + (inner - low) % span), sort)
+    raise SolutionError(
+        f"'{name}' is not a value this can read: the derivation gives values "
+        "in the solver's own term language, and this one has no SMT-LIB "
+        "spelling here"
+    )
+
+
+def trail(text: str, query: str, task_text: str) -> moxi_witness.Trail:
     """A solver's `unsat` derivation as the trail of states it describes."""
-    actuals = declared_variables(task_text)
+    pairs = declared_pairs(task_text)
     states = []
     for index, values in enumerate(derivation(text)):
-        if len(values) != len(actuals):
+        if len(values) != len(pairs):
             raise SolutionError(
                 f"step {index} of the derivation gives {len(values)} value(s) "
-                f"but the system declares {len(actuals)} variable(s)"
+                f"but the system declares {len(pairs)} variable(s)"
             )
         states.append(
             moxi_witness.State(
                 index,
-                [moxi_witness.Assignment(n, v) for n, v in zip(actuals, values)],
+                [
+                    moxi_witness.Assignment(name, value(raw, sort))
+                    for (name, sort), raw in zip(pairs, values)
+                ],
                 [],
             )
         )
@@ -304,6 +389,12 @@ def certificate(text: str, query: str, task_text: Optional[str] = None) -> moxi_
         raise SolutionError(
             "the solver answered 'unsat': the clauses have no solution, so "
             "there is no invariant to certify"
+        )
+    complaint = re.search(r"^\s*(Error\b.*)$", text, re.M)
+    if complaint is not None:
+        raise SolutionError(
+            "the solver answered 'sat' and then printed an error instead of a "
+            f"model: {complaint.group(1)[:120]}"
         )
     sorts = [sort for _, sort in declared_pairs(task_text)] if task_text else []
     defs = definitions(text) or prolog_definitions(text, sorts)
@@ -324,7 +415,8 @@ def certificate(text: str, query: str, task_text: Optional[str] = None) -> moxi_
     # the solver said is rewritten, and the names it used stay visible.
     formula = only.body
     if task_text is not None:
-        actuals = declared_variables(task_text)
+        pairs = declared_pairs(task_text)
+        actuals = [name for name, _ in pairs]
         formals = [name for name, _ in only.args]
         if len(formals) != len(actuals):
             raise SolutionError(
@@ -332,6 +424,16 @@ def certificate(text: str, query: str, task_text: Optional[str] = None) -> moxi_
                 f"system declares {len(actuals)} variable(s), so the two cannot "
                 "be matched up"
             )
+        # The sorts have to agree as well. Eldarica reports `Int` for the
+        # parameters of a `Real`-sorted predicate on some LRA problems, and
+        # applying that definition to the system's variables would be
+        # ill-sorted -- better said here than discovered by the checker.
+        for (formal, declared), (actual, wanted) in zip(only.args, pairs):
+            if declared != wanted:
+                raise SolutionError(
+                    f"the solution sorts '{formal}' as {declared} but the "
+                    f"system declares '{actual}' as {wanted}"
+                )
         formula = f"({only.symbol} {' '.join(actuals)})" if actuals else only.symbol
     return moxi_witness.Certificate(
         f"{query}_cert",

@@ -1,0 +1,8 @@
+(check-system-response main
+:query (qry_rch_0 :result sat :trace qry_rch_0_trace)
+:trace (qry_rch_0_trace :prefix qry_rch_0_trail)
+:trail (qry_rch_0_trail
+	(0 (a_0 (store (store ((as const (Array Int Int)) 4) 2 1) 3 1)) (i 2) (j_0 2) (i1_0 0))
+	(1 (a_0 (store (store ((as const (Array Int Int)) 4) 2 1) 3 1)) (i 3) (j_0 2) (i1_0 0))
+	(2 (a_0 (store (store ((as const (Array Int Int)) 4) 2 1) 3 1)) (i 4) (j_0 2) (i1_0 3)))
+)
