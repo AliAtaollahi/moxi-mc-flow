@@ -50,3 +50,9 @@ it is not part of the CI workflow; run it with `scripts/run_chc2moxi.sh`. Its
 expected outputs are byte comparisons against the MoXI a particular ic3ia and
 MathSAT build produces, so a different build of either can diff without
 anything being wrong -- read the diff before trusting the failure.
+
+`inv2moxicert.json`, `moxi2chc.json`, `parse_moxiwit.json` and
+`chcsol2moxicert.json` cover the certificate tools and need nothing installed:
+their inputs are what the tools printed, captured in `test/inv/`,
+`test/moxiwit/` and `test/chcsol/`. Each compares against a `.expect` file, so
+a run never writes over a fixture.

@@ -1,0 +1,8 @@
+counterexample
+;; step 0
+(and
+  (= flby__AT0 0)
+  (= flby__AT0 time__AT0)
+  (<= 0 time__AT0)
+  (not _OK___AT0)
+)

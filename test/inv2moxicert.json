@@ -1,0 +1,51 @@
+{
+    "script": "../src/inv2moxicert.py",
+    "tests": [
+        {
+            "input": "inv/counter-ic3ia.inv",
+            "options": ["--task", "inv/counter.moxi"],
+            "output": "inv/counter-ic3ia.mxw",
+            "expected_output": [
+                ["inv/counter-ic3ia.mxw.expect",
+                 "inv/counter-ic3ia.mxw"]
+            ]
+        },
+        {
+            "input": "inv/counter-smtlib.inv",
+            "options": ["--task", "inv/counter.moxi", "--from", "smtlib"],
+            "output": "inv/counter-smtlib.mxw",
+            "expected_output": [
+                ["inv/counter-smtlib.mxw.expect",
+                 "inv/counter-smtlib.mxw"]
+            ]
+        },
+        {
+            "input": "inv/counter-kind2.mxw",
+            "options": ["--task", "inv/counter.moxi"],
+            "output": "inv/counter-from-kind2.mxw",
+            "expected_output": [
+                ["inv/counter-from-kind2.mxw.expect",
+                 "inv/counter-from-kind2.mxw"]
+            ]
+        },
+        {
+            "input": "inv/counter-kind2-infix.mxw",
+            "options": ["--task", "inv/counter.moxi", "--from", "kind2"],
+            "output": "inv/counter-from-kind2-infix.mxw",
+            "expected_output": [
+                ["inv/counter-from-kind2-infix.mxw.expect",
+                 "inv/counter-from-kind2-infix.mxw"]
+            ]
+        },
+        {
+            "input": "inv/counter-cex.inv",
+            "options": ["--task", "inv/counter.moxi"],
+            "expected_returncode": 1
+        },
+        {
+            "input": "inv/counter-lossy.mxw",
+            "options": ["--task", "inv/counter.moxi"],
+            "expected_returncode": 1
+        }
+    ]
+}

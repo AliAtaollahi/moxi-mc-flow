@@ -1,0 +1,5 @@
+(check-system-response 
+ :verbosity full
+ :query (qry_rch_0 unsat :certificate qry_rch_0_cert)
+ :certificate (qry_rch_0_cert :inv ((not ((-1 * x_0) > 0)) and rch_0) :k 1)
+ )

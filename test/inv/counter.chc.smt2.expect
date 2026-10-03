@@ -1,0 +1,12 @@
+;; Written by moxi2chc from a MoXI task: one predicate over the
+;; variables of system 'main', asking query 'qry_rch_0'.
+(set-logic HORN)
+(declare-fun inv (Int) Bool)
+(assert (forall ((x_0 Int))
+  (=> (and true (let ((.def_8 x_0)) (= .def_8 0))) (inv x_0))))
+(assert (forall ((x_0 Int) (x_0.next Int))
+  (=> (and (inv x_0) true true (let ((.def_11 (* (- 1) x_0.next))) (let ((.def_8 x_0)) (let ((.def_12 (+ .def_8 .def_11))) (= .def_12 (- 1))))))
+      (inv x_0.next))))
+(assert (forall ((x_0 Int))
+  (=> (and (inv x_0) true (not (let ((.def_8 x_0)) (<= 0 .def_8)))) false)))
+(check-sat)

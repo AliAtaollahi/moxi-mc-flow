@@ -9,15 +9,33 @@
     "tests": [
         {
             "input": "chcsol/golem-counter.sol",
-            "output": "chcsol/golem-counter.mxw"
+            "output": "chcsol/golem-counter.mxw",
+            "expected_output": [
+                [
+                    "chcsol/golem-counter.mxw.expect",
+                    "chcsol/golem-counter.mxw"
+                ]
+            ]
         },
         {
             "input": "chcsol/eldarica-counter.sol",
-            "output": "chcsol/eldarica-counter.mxw"
+            "output": "chcsol/eldarica-counter.mxw",
+            "expected_output": [
+                [
+                    "chcsol/eldarica-counter.mxw.expect",
+                    "chcsol/eldarica-counter.mxw"
+                ]
+            ]
         },
         {
             "input": "chcsol/z3-spacer-counter.sol",
-            "output": "chcsol/z3-spacer-counter.mxw"
+            "output": "chcsol/z3-spacer-counter.mxw",
+            "expected_output": [
+                [
+                    "chcsol/z3-spacer-counter.mxw.expect",
+                    "chcsol/z3-spacer-counter.mxw"
+                ]
+            ]
         }
     ]
 }

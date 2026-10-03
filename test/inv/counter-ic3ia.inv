@@ -1,0 +1,5 @@
+invariant
+;; clause 0
+(or
+  (<= 0 x_0)
+)

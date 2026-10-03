@@ -3,19 +3,53 @@
     "tests": [
         {
             "input": "moxiwit/certificate-inductive.mxw",
-            "output": "moxiwit/certificate-inductive.mxw"
+            "output": "moxiwit/certificate-inductive.out.mxw",
+            "expected_output": [
+                [
+                    "moxiwit/certificate-inductive.mxw",
+                    "moxiwit/certificate-inductive.out.mxw"
+                ]
+            ]
         },
         {
             "input": "moxiwit/certificate-k-inductive.mxw",
-            "output": "moxiwit/certificate-k-inductive.mxw"
+            "output": "moxiwit/certificate-k-inductive.out.mxw",
+            "expected_output": [
+                [
+                    "moxiwit/certificate-k-inductive.mxw",
+                    "moxiwit/certificate-k-inductive.out.mxw"
+                ]
+            ]
         },
         {
             "input": "moxiwit/certificate-aux-define.mxw",
-            "output": "moxiwit/certificate-aux-define.mxw"
+            "output": "moxiwit/certificate-aux-define.out.mxw",
+            "expected_output": [
+                [
+                    "moxiwit/certificate-aux-define.mxw",
+                    "moxiwit/certificate-aux-define.out.mxw"
+                ]
+            ]
         },
         {
             "input": "moxiwit/trail-counter.mxw",
-            "output": "moxiwit/trail-counter.mxw"
+            "output": "moxiwit/trail-counter.out.mxw",
+            "expected_output": [
+                [
+                    "moxiwit/trail-counter.mxw",
+                    "moxiwit/trail-counter.out.mxw"
+                ]
+            ]
+        },
+        {
+            "input": "moxiwit/kind2-response.mxw",
+            "output": "moxiwit/kind2-response.out.mxw",
+            "expected_output": [
+                [
+                    "moxiwit/kind2-response.out.mxw.expect",
+                    "moxiwit/kind2-response.out.mxw"
+                ]
+            ]
         }
     ]
 }

@@ -1,0 +1,2 @@
+; An invariant as any tool willing to print SMT-LIB would write it.
+(define-fun .induct_inv () Bool (! (<= 0 x_0) :invar-property 0))

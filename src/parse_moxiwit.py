@@ -13,8 +13,14 @@ names come from can give them sorts. A consumer that has the task resolves them;
 one that only moves a witness around does not have to.
 """
 
+import pathlib
 import re
+import sys
 from typing import Optional
+
+if __name__ == "__main__" and __package__ is None:
+    # Run as a script (the test harness does), not only imported as a module.
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from src import log, moxi_witness
 
@@ -115,6 +121,11 @@ def _definitions(sexp: str) -> list[moxi_witness.Definition]:
 
 def _certificate(sexp: str) -> moxi_witness.Certificate:
     name, attrs, positional = _attributes(sexp)
+    # Kind 2 writes the formula as ':inv F' where this writes it last and
+    # unlabelled. Both are read: a reader that refuses the other spelling of
+    # the same object turns a difference in style into a failure to interoperate.
+    if not positional and "inv" in attrs:
+        positional = [attrs.pop("inv")]
     if not positional:
         return moxi_witness.Certificate(name)
     try:
@@ -177,15 +188,21 @@ def _response(sexp: str) -> moxi_witness.CheckSystemResponse:
     items = _items(sexp)
     if not items or items[0] != "check-system-response":
         raise ParseError("not a check-system-response")
-    symbol = items[1]
+    if len(items) < 2:
+        raise ParseError("the response is empty")
+    # The system's name comes first, but Kind 2 leaves it out and starts with
+    # its attributes. Which system was checked is then the reader's to supply.
+    symbol = "" if items[1].startswith(":") else items[1]
     queries, traces, trails, certificates = [], {}, {}, {}
-    i = 2
+    i = 1 if symbol == "" else 2
     while i < len(items):
         key = items[i]
         if not key.startswith(":") or i + 1 >= len(items):
             raise ParseError(f"'{key}' is not an attribute of the response")
         value, i = items[i + 1], i + 2
-        if key == ":query":
+        if key == ":verbosity":
+            pass  # how much Kind 2 was asked to print; not part of the answer
+        elif key == ":query":
             queries.append(value)
         elif key == ":trace":
             name, attrs, _ = _attributes(value)
@@ -203,8 +220,17 @@ def _response(sexp: str) -> moxi_witness.CheckSystemResponse:
 
     responses = []
     for query in queries:
-        name, attrs, _ = _attributes(query)
-        result = moxi_witness.QueryResult(attrs.get("result", "unknown"))
+        name, attrs, loose = _attributes(query)
+        # ':result unsat' here, a bare 'unsat' in what Kind 2 writes.
+        verdict = attrs.get("result")
+        if verdict is None:
+            verdict = next(
+                (w for w in loose if w in ("sat", "unsat", "unknown")), "unknown"
+            )
+        try:
+            result = moxi_witness.QueryResult(verdict)
+        except ValueError as exc:
+            raise ParseError(f"'{verdict}' is not a query result") from exc
         trace: Optional[moxi_witness.Trace] = None
         if "trace" in attrs:
             spec = traces.get(attrs["trace"], {})
@@ -256,7 +282,6 @@ def main() -> int:
     printer disagree is not one another tool can be asked to produce.
     """
     import argparse
-    import sys
 
     parser = argparse.ArgumentParser(description="read a MoXI witness and print it")
     parser.add_argument("witness", help="the check-system-response to read")
@@ -275,10 +300,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    import pathlib as _pathlib
-    import sys as _sys
-
-    if __package__ is None:
-        _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
-        from src import log, moxi_witness  # noqa: F811
-    _sys.exit(main())
+    sys.exit(main())
