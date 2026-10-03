@@ -131,10 +131,16 @@ imperfect without being unsound, because nothing downstream trusts it.
 | Pono invariant | `INVAR: <term>` over Btor2 node ids | — | see §7 |
 | AVR invariant | `inv.txt`, AVR's own infix syntax | — | see §7 |
 | nuXmv invariant | SMV expression syntax | — | see §7 |
-| rIC3 | an AIGER witness circuit | — | out of scope |
+| Kind 2 certificate over bit-vectors | the same, but Lustre's syntax is lossy there | — | see §6 |
+| ic3ia counterexample | `counterexample` then `;; step N` cubes | — | see §7 |
+| Eldarica `-sol` | Prolog, `inv(A) :- (A >= 0).` | — | not a gap: `-ssol` is the same content in SMT-LIB |
+| rIC3, certifaiger, cerbtora | an AIGER witness circuit | — | expressible via `:aux`, deliberately not checked |
+| Z3 `(get-proof)`, Golem `--proof-format` | a derivation | — | a different artifact; MoXI reserves no proof slot |
+| anything nonlinear | — | — | out of scope |
 
 "Tested" means: the tool was run here, its output translated, and the result
-confirmed by `moxichecker --validate` against the MoXI task.
+confirmed by `moxichecker --validate` against the MoXI task. Outward, the flow
+also writes nuXmv's witness format (`moxiwit2nuxmvwit.py`).
 
 ## 5. Several predicates
 
