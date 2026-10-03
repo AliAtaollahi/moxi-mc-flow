@@ -21,6 +21,13 @@ Dialects:
 `kind2`   what Kind 2's MoXI front end (`kmoxi`) prints: a whole
           `check-system-response`, for either verdict.
 
+          Be warned about what its certificate holds. Kind 2's
+          `Certificate.t` is `(k, term)` and the term it stores is the
+          *property*, with the depth it was established at, not an inductive
+          strengthening -- so a translated Kind 2 certificate checks out only
+          when the property is k-inductive by itself. Nothing here can fix
+          that: the invariants Kind 2 leant on are not in the file.
+
           For `unsat` its certificate is `(c :inv TERM :k N)`, and two things
           have to be undone. The term is in Lustre's infix syntax, not SMT-LIB,
           so it is converted; and a `:reachable` symbol stands in Kind 2 for

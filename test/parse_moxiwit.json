@@ -32,6 +32,16 @@
             ]
         },
         {
+            "input": "moxiwit/certificate-aux-define.mxw",
+            "output": "moxiwit/certificate-aux-define.out.mxw",
+            "expected_output": [
+                [
+                    "moxiwit/certificate-aux-define.mxw",
+                    "moxiwit/certificate-aux-define.out.mxw"
+                ]
+            ]
+        },
+        {
             "input": "moxiwit/trail-counter.mxw",
             "output": "moxiwit/trail-counter.out.mxw",
             "expected_output": [

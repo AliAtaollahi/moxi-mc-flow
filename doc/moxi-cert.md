@@ -459,6 +459,25 @@ proved cannot be recovered from what was printed, so those are refused rather
 than guessed at. Printing the term as SMT-LIB would fix it, and is worth
 raising upstream.
 
+**And its `:certificate` is not a certificate.** `Certificate.t` in Kind 2 is
+`int * Term.t`, and what goes in it is the *property* with the depth at which
+it was established -- `let cert = k, p.Property.prop_term` in
+`induction/base.ml`, `let cert = k, phi` in `induction/step.ml` -- not an
+inductive strengthening of it. `moxiResults.ml` prints that pair straight into
+`:inv TERM :k N`. So a Kind 2 certificate checks out exactly when the property
+happens to be k-inductive on its own, and not when Kind 2 needed the other
+invariants it found along the way, because those are not in the file. Measured
+over 24 CHC-derived tasks: **7 of 18 validate**, the same 7 under z3, msat and
+cvc5. Kind 2 does have machinery that computes a self-contained invariant,
+behind `--certif`; the MoXI printer does not use it. That is the thing to
+raise upstream.
+
+A separate disagreement shows up in 7 of the 11 that fail: there kmoxi answers
+`unsat`, where the benchmark label, Golem, Eldarica, Z3/Spacer and MoXIchecker
+all say the query is reachable. The certificate is refuted, which is the
+system working -- whether the cause is the engine or the MoXI front end is not
+established from here.
+
 And `moxiInput.ml` binds a `:reachable` symbol to `negate term`: Kind 2 proves
 invariance of `¬R` where the task asks whether `R` is reachable. So the symbol
 in a Kind 2 certificate means the opposite of the symbol in the task, and the
