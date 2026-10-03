@@ -108,36 +108,41 @@ Refer to the usage information for more options:
     python3 modelcheck.py --help
 
 
-## Certificates
+## Certificates and witnesses
 
-When a property holds, what a model checker found is an inductive invariant, and MoXI reports it in
-the `:certificate` of a `check-system-response`. `doc/moxi-cert.md` says what that holds, what a
-checker has to verify, and how each tool's own spelling maps onto it. Four scripts move a proof
-between the two:
+A `check-system-response` reports what a model checker found: a counterexample
+trace for a reachable query, and for an unreachable one the inductive invariant
+that proves it, in its `:certificate`. `doc/moxi-cert.md` says what a
+certificate holds -- three optional keywords, `:k`, `:simple-path` and `:aux`,
+over an SMT-LIB formula -- what a checker has to verify, and how each tool's own
+spelling maps onto it. Four scripts move a witness between the two:
 
-`src/inv2moxicert.py` turns the invariant a model checker printed into a certificate. It reads what
-`ic3ia -w` prints, what Kind 2's MoXI front end prints, and plain SMT-LIB:
+`src/tool2moxiwit.py` turns what a model checker printed into a MoXI witness. It
+reads what `ic3ia -w` prints, what Kind 2's MoXI front end prints for either
+verdict, and plain SMT-LIB:
 
-    python3 src/inv2moxicert.py inv.txt --task task.moxi --from ic3ia -o proof.mxw
+    python3 src/tool2moxiwit.py inv.txt --task task.moxi --from ic3ia -o proof.mxw
 
-`src/chcsol2moxicert.py` does the same for a CHC solver's solution, which is a `define-fun` per
-predicate:
+`src/chcsol2moxicert.py` does the same for a CHC solver's solution, which is a
+`define-fun` per predicate. The solution is carried through as the `define-fun`
+the solver wrote, and the certificate applies it to the system's variables:
 
     python3 src/chcsol2moxicert.py solution.txt --task task.moxi \
         --system main --query qry_rch_0 -o proof.mxw
 
-`src/moxi2chc.py` writes a MoXI task back out as Horn clauses over a single predicate. This is how
-a Horn problem with several predicates gets a certificate: `horn2vmt` folds the predicates into one
-and does not publish the map, so the way round it is to ask the solver about the folded system
-instead (see `doc/moxi-cert.md`, section 5):
+`src/moxi2chc.py` writes a MoXI task back out as Horn clauses over a single
+predicate. This is how a Horn problem with several predicates gets a
+certificate: `horn2vmt` folds the predicates into one and does not publish the
+map, so the way round it is to ask the solver about the folded system instead
+(see `doc/moxi-cert.md`, section 5):
 
     python3 src/moxi2chc.py task.moxi -o task.chc.smt2
 
-`src/parse_moxiwit.py` reads a response back and prints it, which is both a normaliser and the
-round-trip test.
+`src/parse_moxiwit.py` reads a response back and prints it, which is both a
+normaliser and the round-trip test.
 
-Either kind of witness is checked by MoXIchecker, in a run of its own and with whichever solver you
-like:
+Either kind of witness is checked by MoXIchecker, in a run of its own and with
+whichever solver you like:
 
     moxichecker --validate proof.mxw -s z3 task.moxi
 

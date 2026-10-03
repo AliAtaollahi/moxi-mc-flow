@@ -22,12 +22,12 @@
             ]
         },
         {
-            "input": "moxiwit/certificate-aux-define.mxw",
-            "output": "moxiwit/certificate-aux-define.out.mxw",
+            "input": "moxiwit/certificate-aux.mxw",
+            "output": "moxiwit/certificate-aux.out.mxw",
             "expected_output": [
                 [
-                    "moxiwit/certificate-aux-define.mxw",
-                    "moxiwit/certificate-aux-define.out.mxw"
+                    "moxiwit/certificate-aux.mxw",
+                    "moxiwit/certificate-aux.out.mxw"
                 ]
             ]
         },
@@ -42,12 +42,32 @@
             ]
         },
         {
+            "input": "moxiwit/certificate-legacy.mxw",
+            "output": "moxiwit/certificate-legacy.out.mxw",
+            "expected_output": [
+                [
+                    "moxiwit/certificate-legacy.out.mxw.expect",
+                    "moxiwit/certificate-legacy.out.mxw"
+                ]
+            ]
+        },
+        {
             "input": "moxiwit/kind2-response.mxw",
             "output": "moxiwit/kind2-response.out.mxw",
             "expected_output": [
                 [
                     "moxiwit/kind2-response.out.mxw.expect",
                     "moxiwit/kind2-response.out.mxw"
+                ]
+            ]
+        },
+        {
+            "input": "moxiwit/kind2-trail.mxw",
+            "output": "moxiwit/kind2-trail.out.mxw",
+            "expected_output": [
+                [
+                    "moxiwit/kind2-trail.out.mxw.expect",
+                    "moxiwit/kind2-trail.out.mxw"
                 ]
             ]
         }

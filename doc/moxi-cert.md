@@ -26,28 +26,32 @@ meaning. It is a completion of the response language, not a new one.
     ⟨result⟩     ::= sat | unsat | unknown
 
     ⟨certificate⟩ ::= ( ⟨symbol⟩
-                        [ :kind ⟨kind⟩ ]
                         [ :k ⟨numeral⟩ ]
                         [ :simple-path ⟨bool⟩ ]
                         [ :aux ( ⟨sorted-var⟩* ) ]
-                        [ :define ( ⟨definition⟩* ) ]
                         ⟨term⟩ )
 
-    ⟨kind⟩       ::= inductive | k-inductive
-    ⟨definition⟩ ::= ( ⟨symbol⟩ ( ⟨sorted-var⟩* ) ⟨sort⟩ ⟨term⟩ )
+The trailing `⟨term⟩` is the certificate: an SMT-LIB term over the variables the
+`check-system` command declares, plus whatever `:aux` introduces and whatever
+the witness's own `define-fun` commands define.
 
-The trailing `⟨term⟩` is the certificate. It is an SMT-LIB term over the
-variables the `check-system` command declares, plus whatever `:aux` and
-`:define` introduce.
+**Three keywords, and all three have a default.** `:k` is 1, `:simple-path` is
+false, `:aux` is empty, so the ordinary case writes none of them:
+
+    (check-system-response main
+    :query (q :result unsat :certificate q_cert)
+    :certificate (q_cert
+        (<= 0 x_0))
+    )
 
 
-## 2. What each keyword is for
+## 2. What each keyword is for, and what is deliberately absent
 
-`:kind` and `:k` -- `inductive` with `k` 1 is the common case. `k-inductive`
-with `k > 1` says the formula is closed under *k* steps rather than one, which
-is what k-induction and Kind 2 find and what it would be lossy to force into
-one step: strengthening a k-inductive invariant into an inductive one is work,
-and a certificate should report what was proved.
+`:k` -- the induction depth. 1 is ordinary induction. A larger value says the
+formula is closed under *k* steps rather than one, which is what k-induction
+and Kind 2 find and what it would be lossy to force into one step:
+strengthening a k-inductive invariant into an inductive one is work, and a
+certificate should report what was proved.
 
 `:simple-path` -- when true, the *k* states may be assumed pairwise distinct.
 This is the standard simple-path restriction. It is sound on its own terms: if
@@ -64,14 +68,30 @@ and a circuit has latches of its own. Declaring them keeps such a certificate
 relate them to the system's variables should say so rather than guess, and
 MoXIchecker does say so.
 
-`:define` -- named pieces, in exactly `define-fun` shape. Three things need it.
-A CHC solver's solution is a list of `define-fun`s and transcribing it is better
-than rewriting it. A certificate that mentions a `:reachable` symbol has to
-carry that symbol's meaning, because a `:reachable` name is an abbreviation the
-`check-system` command introduces and not a variable. And a large invariant is
-unreadable without sharing. SMT-LIB has no `define-fun` inside a term, so a use
-expands to a `let`.
+**Not `:kind`.** An earlier draft wrote `:kind inductive` or `:kind
+k-inductive` beside `:k`. It says nothing `:k` does not, and a word that
+repeats a number is a word that can contradict it. Dropped; still read, so
+files that have it keep working.
 
+**Not `:define`.** The same draft gave the certificate an attribute for naming
+pieces of its formula. It is not needed: `define-fun` is already a MoXI
+command, and a witness is a MoXI file, so a witness that needs a name carries
+the command.
+
+    (define-fun inv ((x Int)) Bool (<= 0 x))
+
+    (check-system-response main
+    :query (q :result unsat :certificate q_cert)
+    :certificate (q_cert
+        (inv x_0))
+    )
+
+That is what a CHC solver's answer looks like after translation: the solver's
+model, transcribed, and one application of it to the system's variables.
+Nothing of what the solver wrote is rewritten. It is also strictly better than
+an attribute would have been -- the definitions are visible to every response
+in the file, an SMT-LIB reader already understands them, and a checker can hand
+them to its parser instead of substituting text. `:define` is still read.
 
 ## 3. What a checker has to do
 
@@ -102,16 +122,19 @@ imperfect without being unsound, because nothing downstream trusts it.
 | --- | --- | --- | --- |
 | CHC solution, one predicate (Golem, Eldarica, Z3/Spacer) | `(define-fun p ((x S)…) Bool …)` | `chcsol2moxicert.py` | tested, all three solvers |
 | CHC solution, several predicates | the same, one per predicate | `moxi2chc.py` then `chcsol2moxicert.py` | tested, see §5 |
-| ic3ia | `invariant` then `;; clause N` blocks | `inv2moxicert.py --from ic3ia` | tested |
-| Kind 2 (`kmoxi`) | a response with `(c :inv TERM :k N)` | `inv2moxicert.py --from kind2` | tested, see §6 |
-| anything printing SMT-LIB | a term, a `define-fun`, or a VMT `:invar-property` | `inv2moxicert.py --from smtlib` | tested |
-| AVR | `inv.txt`, AVR's own infix syntax | — | see §7 |
-| nuXmv | SMV expression syntax | — | see §7 |
+| ic3ia invariant | `invariant` then `;; clause N` blocks | `tool2moxiwit.py --from ic3ia` | tested |
+| Kind 2 certificate | a response with `(c :inv TERM :k N)` | `tool2moxiwit.py --from kind2` | tested, see §6 |
+| Kind 2 counterexample | a response with a scoped, nested `:trail` | `tool2moxiwit.py --from kind2` | tested, see §6 |
+| anything printing SMT-LIB | a term, a `define-fun`, or a VMT `:invar-property` | `tool2moxiwit.py --from smtlib` | tested |
+| Btor2 counterexample (BtorMC, AVR, Pono) | a Btor2 witness | `btorwit2moxiwit.py` | already in the flow |
+| MoXI itself | a `check-system-response` | `parse_moxiwit.py` | tested, round-trips |
+| Pono invariant | `INVAR: <term>` over Btor2 node ids | — | see §7 |
+| AVR invariant | `inv.txt`, AVR's own infix syntax | — | see §7 |
+| nuXmv invariant | SMV expression syntax | — | see §7 |
 | rIC3 | an AIGER witness circuit | — | out of scope |
 
 "Tested" means: the tool was run here, its output translated, and the result
 confirmed by `moxichecker --validate` against the MoXI task.
-
 
 ## 5. Several predicates
 
@@ -154,33 +177,49 @@ confirmed.
 
 ## 6. Kind 2
 
-Kind 2's MoXI front end already prints a `check-system-response` with a
-certificate, which makes it the one place where two spellings of this object
-exist. Three differences, all read by the tools here:
+Kind 2's MoXI front end already prints a `check-system-response`, for either
+verdict, which makes it the one place where two spellings of these objects
+exist. Five differences, all read by the tools here:
 
 1. It leaves out the system's name, so the response starts with its attributes.
 2. It writes the query's result positionally, `(q unsat …)`, not `:result unsat`.
-3. It labels the formula `:inv` instead of leaving it last.
+3. It labels the certificate's formula `:inv` instead of leaving it last.
+4. It puts the states of a trail in a list of their own, `(name ((0 …) …))`.
+5. In a trail it scopes the names, `main::x_0` for the task's `x_0`, and lists
+   the `:reachable` symbols beside the real variables.
 
-A fourth cannot be read around. The term is printed by Lustre's expression
-printer, not as SMT-LIB. For `Bool`, `Int` and `Real` that is a different
-syntax for the same term and `inv2moxicert.py` converts it. For bit-vectors it
-is lossy: `string_of_symbol` prints `div` for both `bvudiv` and `bvsdiv`, `<`
-for both `bvult` and `bvslt`, `&&` for `bvand`, and a literal as `(uint<8> 5)`.
-What was proved cannot be recovered from what was printed, so those are
-refused rather than guessed at. Printing the term as SMT-LIB would fix it, and
-is worth raising upstream.
+Two more need care rather than reading.
 
-One more thing has to be undone. Kind 2 gives the `:reachable` symbol of the
-task the *negation* of the term the task gives it -- it proves invariance of
-`¬R` where the task asks whether `R` is reachable -- so the translator emits
-that definition with the sign put back. Kind 2 also relaxes the symbol to
-`true` in the initial state; the translation does not, which can only make the
-certificate stronger, so a certificate that relied on the relaxation fails
-initiation and is reported rather than quietly accepted.
+A certificate's term is printed by Lustre's expression printer, not as
+SMT-LIB. For `Bool`, `Int` and `Real` that is a different syntax for the same
+term and `tool2moxiwit.py` converts it. For bit-vectors it is lossy:
+`string_of_symbol` prints `div` for both `bvudiv` and `bvsdiv`, `<` for both
+`bvult` and `bvslt`, `&&` for `bvand`, and a literal as `(uint<8> 5)`. What was
+proved cannot be recovered from what was printed, so those are refused rather
+than guessed at. Printing the term as SMT-LIB would fix it, and is worth
+raising upstream.
 
+And `moxiInput.ml` binds a `:reachable` symbol to `negate term`: Kind 2 proves
+invariance of `¬R` where the task asks whether `R` is reachable. So the symbol
+in a Kind 2 certificate means the opposite of the symbol in the task, and the
+translation emits its definition with the sign put back. Kind 2 also relaxes
+the symbol to `true` in the initial state; the translation does not, which can
+only make the certificate stronger, so a certificate that relied on the
+relaxation fails initiation and is reported rather than quietly accepted.
+
+One practical note: run `kmoxi --color false`. Otherwise the terminal escapes
+it prints around unchanged values in a trail end up in the file.
 
 ## 7. Not covered
+
+**Pono** prints `INVAR: <term>` with `--show-invar`, in SMT-LIB, which looks
+immediately usable. It is not. The names are Btor2 node ids -- `state34`, not
+the variable the task declares -- and the system it is an invariant *of* is the
+Btor2 encoding `moxi2btor` produces, which splits every MoXI variable into
+`.cur`, `.next` and `.init` copies. So the term is a formula over a different
+transition system, and relating the two needs the Btor2 node map. Unlike
+`horn2vmt`'s fold that map is ours, so this is work rather than a dead end; it
+is the next format worth adding.
 
 **AVR** writes `inv.txt` in its own infix syntax over the names its Btor2 front
 end made, printed by `Reach::print_sorted_list`. Its source also has an
@@ -191,7 +230,8 @@ parsing the infix form is not, and is not attempted here.
 
 **nuXmv** prints its invariant in SMV expression syntax, which would also need
 the name map `smv2moxi` builds. Neither AVR nor nuXmv is installed on this
-machine, so nothing was written that could not be run against the tool.
+machine, and building AVR needs `sudo apt install` for its dependencies, so
+nothing was written that could not be run against the tool.
 
 **rIC3** certifies through certifaiger/cerbtora, which answer with an AIGER
 witness circuit rather than a formula. That is the `:aux` case: representable,
@@ -202,6 +242,6 @@ failing property, but they are cubes -- `(= a b)` and `(<= 0 x)` appear among
 them -- and a `:trail` lists concrete values. The blocks that *are* complete
 assignments do not line up either: ic3ia carries a nondeterministic choice in
 the state it leads to, where a MoXI `:input` belongs to the step it drives.
-`inv2moxicert.py` recognises a counterexample and refuses it.
+`tool2moxiwit.py` recognises a counterexample and refuses it.
 
 **Nonlinear problems** are out of scope throughout.

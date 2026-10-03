@@ -126,9 +126,10 @@ def certificate(text: str, query: str, task_text: Optional[str] = None) -> moxi_
             "solution to the folded system needs that fold's map"
         )
     only = defs[0]
-    # One predicate: its arguments are the system's state, in order, so the body
-    # is the invariant once the formals carry the system's names. It is kept as a
-    # ':define' as well, so the certificate still says where it came from.
+    # One predicate: its arguments are the system's state, in order. The
+    # solution is carried through as the `define-fun` the solver wrote, and the
+    # certificate applies it to the system's variables -- so nothing of what
+    # the solver said is rewritten, and the names it used stay visible.
     formula = only.body
     if task_text is not None:
         actuals = declared_variables(task_text)
@@ -139,7 +140,7 @@ def certificate(text: str, query: str, task_text: Optional[str] = None) -> moxi_
                 f"system declares {len(actuals)} variable(s), so the two cannot "
                 "be matched up"
             )
-        formula = rename(only.body, formals, actuals)
+        formula = f"({only.symbol} {' '.join(actuals)})" if actuals else only.symbol
     return moxi_witness.Certificate(
         f"{query}_cert",
         formula=formula,

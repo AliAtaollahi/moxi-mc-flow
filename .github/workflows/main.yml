@@ -50,10 +50,10 @@ jobs:
         cd test/
         python3 test.py chcsol2moxicert.json
 
-    - name: inv2moxicert
+    - name: tool2moxiwit
       run: |
         cd test/
-        python3 test.py inv2moxicert.json
+        python3 test.py tool2moxiwit.json
 
     - name: moxi2chc
       run: |

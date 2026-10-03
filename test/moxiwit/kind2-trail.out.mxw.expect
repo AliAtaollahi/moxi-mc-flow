@@ -1,0 +1,9 @@
+(check-system-response 
+:query (qry_rch_0 :result sat :trace qry_rch_0_trace)
+:trace (qry_rch_0_trace :prefix qry_rch_0_prefix)
+:trail (qry_rch_0_prefix
+	(0 (main::x_0 0) (rch_0 false))
+	(1 (main::x_0 1) (rch_0 false))
+	(2 (main::x_0 2) (rch_0 false))
+	(3 (main::x_0 3) (rch_0 true)))
+)

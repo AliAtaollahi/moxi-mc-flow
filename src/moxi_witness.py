@@ -11,11 +11,13 @@ class QueryResult(Enum):
 
 
 class Definition:
-    """One named piece of a certificate, shaped like SMT-LIB's `define-fun`.
+    """A name a witness gives something, written as MoXI's own `define-fun`.
 
     A CHC solver answers `sat` with a model: one `define-fun` per uninterpreted
-    predicate. Keeping that shape means such a solution is transcribed into a
-    certificate rather than rewritten.
+    predicate. A certificate that mentions a `:reachable` symbol has to say what
+    that symbol means. Both are definitions, `define-fun` is already a MoXI
+    command, and so a witness that needs one simply carries the command --
+    no attribute of its own, and nothing a reader of MoXI has to learn.
     """
 
     def __init__(
@@ -29,7 +31,7 @@ class Definition:
 
     def __str__(self) -> str:
         args = " ".join([f"({n} {s})" for n, s in self.args])
-        return f"({self.symbol} ({args}) {self.sort} {self.body})"
+        return f"(define-fun {self.symbol} ({args}) {self.sort} {self.body})"
 
 
 class Certificate:
@@ -38,9 +40,8 @@ class Certificate:
     MoXI reserves `:certificate` on a query response but says nothing about what
     it holds. This is that content:
 
-        :certificate (name :kind <kind> :k <N> :simple-path <bool>
+        :certificate (name :k <N> :simple-path <bool>
             [:aux ((v sort) ...)]
-            [:define ((p (args) sort body) ...)]
             <formula>)
 
     `formula` is an invariant over the system's variables. Three conditions make
@@ -54,16 +55,20 @@ class Certificate:
       state;
     * safety      -- it excludes every state that satisfies the query.
 
-    `kind` is `inductive` when `k` is 1 and `k-inductive` otherwise; it carries
-    no information a checker needs, and is there so a reader need not decode the
-    number.
+    Two keywords, both carrying something a checker cannot work out for itself.
+    `:k` defaults to 1 and `:simple-path` to false, so the common case writes
+    neither. There is no keyword saying "inductive" or "k-inductive": that is
+    `k = 1` or not, and a word repeating a number is a word to get wrong.
 
-    The two optional parts are what let other tools' certificates arrive here
-    unchanged. `define` holds named pieces in `define-fun` shape, which is how
-    every CHC solver prints a solution and how a per-subsystem invariant would
-    be written. `aux` declares state of the certificate's own, which is what a
-    hardware-style witness circuit needs and what no formula over the original
-    variables can express.
+    `:aux` is the one addition beyond those: state of the certificate's own,
+    which is what a hardware-style witness circuit needs and what no formula
+    over the original variables can express. A checker that cannot relate it to
+    the system should refuse rather than guess.
+
+    Names the formula uses are defined by `define-fun` commands in the same
+    witness -- a MoXI command, not an attribute -- which is how a CHC solver's
+    model is carried through unchanged. `definitions` holds the ones this
+    certificate needs so that `Witness` can write them out.
     """
 
     def __init__(
@@ -84,21 +89,20 @@ class Certificate:
 
     @property
     def kind(self) -> str:
+        """What a reader would call it. Derived, never written."""
         return "inductive" if self.k == 1 else "k-inductive"
 
     def __str__(self) -> str:
         if self.formula is None:  # nothing to say beyond the name
             return f"({self.symbol})"
-        s = (
-            f"({self.symbol} :kind {self.kind} :k {self.k} "
-            f":simple-path {str(self.simple_path).lower()}"
-        )
+        s = f"({self.symbol}"
+        if self.k != 1:
+            s += f" :k {self.k}"
+        if self.simple_path:
+            s += " :simple-path true"
         if self.aux:
             decls = " ".join([f"({n} {srt})" for n, srt in self.aux])
             s += "\n\t:aux (" + decls + ")"
-        if self.definitions:
-            defs = " ".join([str(d) for d in self.definitions])
-            s += "\n\t:define (" + defs + ")"
         return s + "\n\t" + str(self.formula) + ")"
 
 
@@ -219,8 +223,27 @@ class CheckSystemResponse:
 
 
 class Witness:
-    def __init__(self, responses: list[CheckSystemResponse]) -> None:
+    """A whole witness file: the definitions it needs, then its responses."""
+
+    def __init__(
+        self,
+        responses: list[CheckSystemResponse],
+        definitions: Optional[list[Definition]] = None,
+    ) -> None:
         self.responses = responses
+        if definitions is None:
+            definitions = []
+            for response in responses:
+                for certificate in response.certificates:
+                    definitions += certificate.definitions
+        seen, self.definitions = set(), []
+        for definition in definitions:
+            if definition.symbol not in seen:
+                seen.add(definition.symbol)
+                self.definitions.append(definition)
 
     def __str__(self) -> str:
-        return "\n\n".join([str(r) for r in self.responses])
+        out = [str(d) for d in self.definitions]
+        if out:
+            out = ["\n".join(out)]
+        return "\n\n".join(out + [str(r) for r in self.responses])

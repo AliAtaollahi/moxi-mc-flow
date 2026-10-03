@@ -103,8 +103,22 @@ def _declarations(sexp: str) -> list[tuple[str, str]]:
     return out
 
 
+def _definition(sexp: str) -> moxi_witness.Definition:
+    """One ``(define-fun p (args) sort body)`` command."""
+    parts = _items(sexp)
+    if len(parts) != 5 or parts[0] != "define-fun":
+        raise ParseError(f"'{sexp[:60]}' is not a define-fun")
+    _, symbol, args, sort, body = parts
+    return moxi_witness.Definition(symbol, _declarations(args), sort, body)
+
+
 def _definitions(sexp: str) -> list[moxi_witness.Definition]:
-    """``((p (args) sort body) ...)``, the shape of SMT-LIB's define-fun."""
+    """``((p (args) sort body) ...)``, the old ``:define`` attribute.
+
+    Written by an earlier draft of the format and by anyone who followed it.
+    Reading it costs four lines and keeps those files working; what is written
+    now is a `define-fun` command, which MoXI already has.
+    """
     out = []
     for definition in _items(sexp):
         parts = _items(definition)
@@ -149,8 +163,16 @@ def _certificate(sexp: str) -> moxi_witness.Certificate:
 
 def _trail(sexp: str) -> moxi_witness.Trail:
     items = _items(sexp)
+    entries = items[1:]
+    # Kind 2 puts the states in a list of their own, `(name ((0 ...) ...))`,
+    # where this writes them straight after the name. Unwrapping one layer is
+    # unambiguous: a state begins with its index, never with a list.
+    if len(entries) == 1 and entries[0].startswith("("):
+        inner = _items(entries[0])
+        if inner and all(e.startswith("(") for e in inner):
+            entries = inner
     states = []
-    for entry in items[1:]:
+    for entry in entries:
         parts = _items(entry)
         if not parts:
             continue
@@ -252,7 +274,21 @@ def _response(sexp: str) -> moxi_witness.CheckSystemResponse:
 
 
 def parse(text: str) -> moxi_witness.Witness:
-    """Every check-system-response in ``text``."""
+    """Every check-system-response in ``text``, and the definitions around them.
+
+    A witness is a MoXI file, so what names things in it are `define-fun`
+    commands. They are read first and handed to every certificate: which of
+    them a given one needs is a question for whoever resolves the names, and
+    carrying them all is both cheaper and closer to what the file says.
+    """
+    definitions, i = [], 0
+    while True:
+        start = text.find("(define-fun", i)
+        if start < 0:
+            break
+        sexp, i = _sexp(text, start)
+        definitions.append(_definition(sexp))
+
     responses, i = [], 0
     while True:
         start = text.find("(check-system-response", i)
@@ -262,7 +298,14 @@ def parse(text: str) -> moxi_witness.Witness:
         responses.append(_response(sexp))
     if not responses:
         raise ParseError("no check-system-response found")
-    return moxi_witness.Witness(responses)
+    for response in responses:
+        for certificate in response.certificates:
+            certificate.definitions = definitions + certificate.definitions
+    everything = list(definitions)
+    for response in responses:
+        for certificate in response.certificates:
+            everything += certificate.definitions
+    return moxi_witness.Witness(responses, everything)
 
 
 def parse_file(path) -> Optional[moxi_witness.Witness]:

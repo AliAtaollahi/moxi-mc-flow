@@ -1,6 +1,7 @@
+(define-fun inv ((A Int)) Bool (>= A 0))
+
 (check-system-response main
 :query (q :result unsat :certificate q_cert)
-:certificate (q_cert :kind inductive :k 1 :simple-path false
-	:define ((inv ((A Int)) Bool (>= A 0)))
+:certificate (q_cert
 	(>= A 0))
 )

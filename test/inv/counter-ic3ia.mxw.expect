@@ -1,5 +1,5 @@
 (check-system-response main
 :query (qry_rch_0 :result unsat :certificate qry_rch_0_cert)
-:certificate (qry_rch_0_cert :kind inductive :k 1 :simple-path false
+:certificate (qry_rch_0_cert
 	(or (<= 0 x_0)))
 )

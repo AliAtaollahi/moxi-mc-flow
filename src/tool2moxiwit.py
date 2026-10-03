@@ -1,4 +1,4 @@
-"""Turn the invariant a model checker prints into a MoXI certificate.
+"""Turn what a model checker printed into a MoXI witness.
 
 A proof that a safety property holds is one object -- a formula over the
 system's state variables that is true initially, closed under the transition
@@ -7,7 +7,7 @@ object; they only disagree on how to spell it. This translates each spelling
 into the one a `check-system-response` carries, so that one checker can verify
 what another found.
 
-    inv2moxicert.py INVARIANT --task TASK.moxi [--from DIALECT] [-o OUT]
+    tool2moxiwit.py ANSWER --task TASK.moxi [--from DIALECT] [-o OUT]
 
 Dialects:
 
@@ -19,11 +19,19 @@ Dialects:
           and refused, see `ic3ia_blocks`.
 
 `kind2`   what Kind 2's MoXI front end (`kmoxi`) prints: a whole
-          `check-system-response` whose certificate is `(c :inv TERM :k N)`.
-          Two things have to be undone. The term is in Lustre's infix syntax,
-          not SMT-LIB, so it is converted; and a `:reachable` symbol stands in
-          Kind 2 for the *negation* of the term the task gives it, so its
-          definition is carried along with that sign.
+          `check-system-response`, for either verdict.
+
+          For `unsat` its certificate is `(c :inv TERM :k N)`, and two things
+          have to be undone. The term is in Lustre's infix syntax, not SMT-LIB,
+          so it is converted; and a `:reachable` symbol stands in Kind 2 for
+          the *negation* of the term the task gives it, so its definition is
+          carried along with that sign.
+
+          For `sat` it is a trail, and the names in it are scoped --
+          `main::x_0` for the task's `x_0` -- and include the `:reachable`
+          symbols, which are not variables of the system. The scope is dropped
+          and those symbols with it. Run `kmoxi --color false`, or the terminal
+          escapes it prints around unchanged values end up in the file.
 
 `smtlib`  the invariant as an SMT-LIB formula: a bare term, a
           `(define-fun name () Bool body)`, or a VMT `:invar-property`
@@ -264,6 +272,40 @@ def lustre_to_smtlib(text: str) -> str:
     return term
 
 
+def kind2_trail(
+    response, names: set, reachable: set
+) -> tuple[str, moxi_witness.Trail]:
+    """The query and trail of a Kind 2 `sat` answer, over the task's names.
+
+    Kind 2 scopes a variable by the system it belongs to and lists the
+    `:reachable` symbols beside the real ones. The scope is dropped, those
+    symbols are dropped with it, and anything left that the task does not
+    declare stops the translation -- a trail over names nobody can resolve is
+    not a shorter trail, it is an unreadable one.
+    """
+    for query in response.query_responses:
+        if query.trace is None or query.trace.prefix is None:
+            continue
+        states = []
+        for state in query.trace.prefix.states:
+            assigns = []
+            for assign in state.assigns:
+                name = assign.symbol
+                if name not in names and "::" in name:
+                    name = name.rsplit("::", 1)[1]
+                if name in reachable:
+                    continue  # an abbreviation of the check-system, not state
+                if name not in names:
+                    raise InvariantError(
+                        f"the trail assigns '{assign.symbol}', which the task "
+                        "does not declare"
+                    )
+                assigns.append(moxi_witness.Assignment(name, assign.value))
+            states.append(moxi_witness.State(state.index, assigns, []))
+        return query.symbol, moxi_witness.Trail(f"{query.symbol}_trail", states)
+    raise InvariantError("the response carries no trail")
+
+
 def kind2_certificate(text: str) -> tuple[str, str, int]:
     """The query, invariant and induction depth a kmoxi run printed.
 
@@ -377,6 +419,23 @@ def translate(
         formula = blocks[0] if len(blocks) == 1 else "(and " + " ".join(blocks) + ")"
         depth = 1 if k is None else k
     elif dialect == "kind2":
+        witness = parse_moxiwit.parse(text)
+        if any(
+            q.result is moxi_witness.QueryResult.SAT
+            for response in witness.responses
+            for q in response.query_responses
+        ):
+            found_query, trail = kind2_trail(
+                witness.responses[0], {n for n, _ in names}, set(reachable)
+            )
+            query = query or found_query
+            trace = moxi_witness.Trace(f"{query}_trace", trail, None)
+            response = moxi_witness.QueryResponse(
+                query, moxi_witness.QueryResult.SAT, None, trace, None
+            )
+            return moxi_witness.Witness(
+                [moxi_witness.CheckSystemResponse(system, [response])]
+            )
         found_query, lustre, found_k = kind2_certificate(text)
         query = query or found_query
         formula = lustre_to_smtlib(lustre)
