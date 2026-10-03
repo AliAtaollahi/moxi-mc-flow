@@ -80,7 +80,11 @@ composed until they are answered:
 | can follow | `V ∧ V_a ∧ T(x,x′) ∧ V(x′) ∧ ¬∃a′. (T_a ∧ V_a(x′,a′))` | unsat |
 
 A machine whose variables are given by defining equations — which is what a
-circuit's latches are — satisfies both by construction. The older spelling,
+circuit's latches are — satisfies both by construction. "Can it follow" is
+asked of every state satisfying `V`, not only the reachable ones, which is
+stronger than it has to be; the error is in the safe direction, since a
+machine that only follows along reachable paths is refused and none that
+constrains the system is let through. The older spelling,
 `:aux ((v sort) ...)`, declares the state but not how it behaves, so there is
 nothing to compose and nothing to check; it is read, and refused with that
 reason.
