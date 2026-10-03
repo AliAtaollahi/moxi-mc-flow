@@ -189,6 +189,14 @@ on. The result is a `define-fun`, and from there it is §4.1 exactly.
 Confirmed on the four-predicate CHC-COMP task `chc25-lialin-0258`, whose
 Prolog solution is a 500-character nest of `,`, `;` and `\+`.
 
+Two refusals apply to both of Eldarica's model formats, and both were found by
+running it over the benchmark set rather than reasoned about. It sometimes
+prints `sat` and then `Error in conversion from Princess to Eldarica`, with no
+model after it: that is reported rather than parsed into something. And on
+some LRA problems it sorts the parameters `Int` where the task declares
+`Real`, which would be ill-sorted when the definition is applied; the sorts
+are compared against the task and the mismatch is named.
+
 ### 4.3 CHC solver, `unsat` — Golem `--print-witness`, Eldarica `-cex`
 
 `unsat` means the clauses have no model: the property *fails*. What the solver
