@@ -60,10 +60,15 @@ class Certificate:
     neither. There is no keyword saying "inductive" or "k-inductive": that is
     `k = 1` or not, and a word repeating a number is a word to get wrong.
 
-    `:aux` is the one addition beyond those: state of the certificate's own,
-    which is what a hardware-style witness circuit needs and what no formula
-    over the original variables can express. A checker that cannot relate it to
-    the system should refuse rather than guess.
+    `:aux` is the one addition beyond those: the machine the certificate runs
+    beside the system, which is what a hardware-style witness circuit is and
+    what no formula over the original variables can express. It names a
+    `define-system` the witness carries -- a MoXI command, so the machine's
+    reset and next-state behaviour are written the way every other transition
+    system is -- and a checker composes the two and asks the three conditions
+    of the product. The older spelling, a bare list of declarations, says what
+    state there is but not how it behaves, so nothing can be checked against
+    it; it is still read.
 
     Names the formula uses are defined by `define-fun` commands in the same
     witness -- a MoXI command, not an attribute -- which is how a CHC solver's
@@ -101,8 +106,11 @@ class Certificate:
         if self.simple_path:
             s += " :simple-path true"
         if self.aux:
-            decls = " ".join([f"({n} {srt})" for n, srt in self.aux])
-            s += "\n\t:aux (" + decls + ")"
+            if isinstance(self.aux, str):
+                s += f"\n\t:aux {self.aux}"
+            else:
+                decls = " ".join([f"({n} {srt})" for n, srt in self.aux])
+                s += "\n\t:aux (" + decls + ")"
         return s + "\n\t" + str(self.formula) + ")"
 
 
@@ -229,8 +237,14 @@ class Witness:
         self,
         responses: list[CheckSystemResponse],
         definitions: Optional[list[Definition]] = None,
+        systems: Optional[list[str]] = None,
     ) -> None:
         self.responses = responses
+        # A certificate's `:aux` names a `define-system` the witness carries,
+        # which is how a witness circuit is written: the machine's latches with
+        # their reset and next-state behaviour. It is kept as text, because
+        # nothing here has to look inside it -- only the checker does.
+        self.systems = systems or []
         if definitions is None:
             definitions = []
             for response in responses:
@@ -246,4 +260,6 @@ class Witness:
         out = [str(d) for d in self.definitions]
         if out:
             out = ["\n".join(out)]
-        return "\n\n".join(out + [str(r) for r in self.responses])
+        return "\n\n".join(
+            list(self.systems) + out + [str(r) for r in self.responses]
+        )

@@ -1,0 +1,89 @@
+{
+    "script": "../src/chcwit2moxiwit.py",
+    "tests": [
+        {
+            "input": "chcsol/golem-counter.sol",
+            "options": [
+                "--task",
+                "chcsol/counter.moxi"
+            ],
+            "output": "chcsol/golem-counter.mxw",
+            "expected_output": [
+                [
+                    "chcsol/golem-counter.mxw.expect",
+                    "chcsol/golem-counter.mxw"
+                ]
+            ]
+        },
+        {
+            "input": "chcsol/eldarica-counter.sol",
+            "options": [
+                "--task",
+                "chcsol/counter.moxi"
+            ],
+            "output": "chcsol/eldarica-counter.mxw",
+            "expected_output": [
+                [
+                    "chcsol/eldarica-counter.mxw.expect",
+                    "chcsol/eldarica-counter.mxw"
+                ]
+            ]
+        },
+        {
+            "input": "chcsol/z3-spacer-counter.sol",
+            "options": [
+                "--task",
+                "chcsol/counter.moxi"
+            ],
+            "output": "chcsol/z3-spacer-counter.mxw",
+            "expected_output": [
+                [
+                    "chcsol/z3-spacer-counter.mxw.expect",
+                    "chcsol/z3-spacer-counter.mxw"
+                ]
+            ]
+        },
+        {
+            "input": "chcsol/eldarica-counter-prolog.sol",
+            "options": [
+                "--task",
+                "chcsol/counter.moxi"
+            ],
+            "output": "chcsol/eldarica-counter-prolog.mxw",
+            "expected_output": [
+                [
+                    "chcsol/eldarica-counter-prolog.mxw.expect",
+                    "chcsol/eldarica-counter-prolog.mxw"
+                ]
+            ]
+        },
+        {
+            "input": "chcsol/golem-counter-cex.sol",
+            "options": [
+                "--task",
+                "chcsol/bad.moxi"
+            ],
+            "output": "chcsol/golem-counter-cex.mxw",
+            "expected_output": [
+                [
+                    "chcsol/golem-counter-cex.mxw.expect",
+                    "chcsol/golem-counter-cex.mxw"
+                ]
+            ]
+        },
+        {
+            "input": "chcsol/eldarica-counter-cex.sol",
+            "options": [
+                "--task",
+                "chcsol/bad.moxi"
+            ],
+            "output": "chcsol/eldarica-counter-cex.mxw",
+            "expected_output": [
+                [
+                    "chcsol/eldarica-counter-cex.mxw.expect",
+                    "chcsol/eldarica-counter-cex.mxw"
+                ]
+            ]
+        }
+    ]
+}

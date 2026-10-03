@@ -156,7 +156,13 @@ def _certificate(sexp: str) -> moxi_witness.Certificate:
         formula=positional[-1],
         k=k,
         simple_path=attrs.get("simple-path", "false") == "true",
-        aux=_declarations(attrs["aux"]) if "aux" in attrs else [],
+        # ':aux' names a define-system the witness carries; the older
+        # spelling, a bare declaration list, is read too.
+        aux=(
+            (_declarations(attrs["aux"]) if attrs["aux"].startswith("(")
+             else attrs["aux"])
+            if "aux" in attrs else []
+        ),
         definitions=_definitions(attrs["define"]) if "define" in attrs else [],
     )
 
@@ -289,6 +295,17 @@ def parse(text: str) -> moxi_witness.Witness:
         sexp, i = _sexp(text, start)
         definitions.append(_definition(sexp))
 
+    # A ':aux' machine is a `define-system`, carried through as written: this
+    # reader has no use for its insides, and a checker that does will parse it
+    # with the same front end it parses the task with.
+    systems, i = [], 0
+    while True:
+        start = text.find("(define-system", i)
+        if start < 0:
+            break
+        sexp, i = _sexp(text, start)
+        systems.append(sexp)
+
     responses, i = [], 0
     while True:
         start = text.find("(check-system-response", i)
@@ -305,7 +322,7 @@ def parse(text: str) -> moxi_witness.Witness:
     for response in responses:
         for certificate in response.certificates:
             everything += certificate.definitions
-    return moxi_witness.Witness(responses, everything)
+    return moxi_witness.Witness(responses, everything, systems)
 
 
 def parse_file(path) -> Optional[moxi_witness.Witness]:

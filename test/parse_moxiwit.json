@@ -42,12 +42,12 @@
             ]
         },
         {
-            "input": "moxiwit/certificate-legacy.mxw",
-            "output": "moxiwit/certificate-legacy.out.mxw",
+            "input": "moxiwit/certificate-aux-legacy.mxw",
+            "output": "moxiwit/certificate-aux-legacy.out.mxw",
             "expected_output": [
                 [
-                    "moxiwit/certificate-legacy.out.mxw.expect",
-                    "moxiwit/certificate-legacy.out.mxw"
+                    "moxiwit/certificate-aux-legacy.out.mxw.expect",
+                    "moxiwit/certificate-aux-legacy.out.mxw"
                 ]
             ]
         },

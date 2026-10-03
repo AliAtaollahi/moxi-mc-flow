@@ -1,0 +1,14 @@
+(set-logic QF_LIA)
+(define-system main 
+   :input () 
+   :output ((x_0 Int)) 
+   :local () 
+   :init (let ((.def_8 x_0)) (= .def_8 0)) 
+   :trans (let ((.def_11 (* (- 1) x_0'))) (let ((.def_8 x_0)) (let ((.def_12 (+ .def_8 .def_11))) (= .def_12 (- 1))))) 
+   :inv true )
+(check-system main 
+   :input () 
+   :output ((x_0 Int)) 
+   :local () 
+   :reachable (rch_0 (not (let ((.def_8 x_0)) (<= .def_8 2))))
+   :query (qry_rch_0 (rch_0)))

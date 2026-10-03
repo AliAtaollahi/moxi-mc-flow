@@ -1,8 +1,12 @@
-(define-fun inv ((x Int)) Bool (>= x 0))
+(define-system cert_machine
+   :output ((seen Bool))
+   :init (not seen)
+   :trans seen'
+   :inv true )
 
 (check-system-response main
-:query (q :result unsat :certificate q_cert)
-:certificate (q_cert :k 3 :simple-path true
-	:aux ((pc Int))
-	(and (inv x) (= pc 0)))
+:query (qry_rch_0 :result unsat :certificate qry_rch_0_cert)
+:certificate (qry_rch_0_cert
+	:aux cert_machine
+	(and (<= 0 x_0) (or (not seen) (<= 1 x_0))))
 )

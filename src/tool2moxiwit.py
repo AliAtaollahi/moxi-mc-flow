@@ -117,12 +117,15 @@ def ic3ia_blocks(text: str) -> tuple[str, list[str]]:
     The blocks are numbered and the numbers are checked, because an invariant
     with a clause left out is not a shorter invariant, it is a weaker one.
 
-    A counterexample is recognised and refused. Its `;; step` blocks are cubes
-    rather than states -- `(= a b)` and `(<= 0 x)` appear among them -- and a
-    `:trail` has no spelling for a symbolic path. The steps that *are* complete
-    assignments do not line up either: ic3ia carries a nondeterministic choice
-    in the state it leads to, where a MoXI `:input` belongs to the step it
-    drives.
+    A counterexample is recognised and refused. Most of its `;; step` blocks
+    are cubes rather than states -- `(= a b)` relates two variables and
+    `(<= 0 x)` constrains one -- and a `:trail` lists concrete values, with no
+    spelling for a symbolic path. On bit-vector problems the blocks *are*
+    complete assignments, and those still do not replay: the trail reads, and
+    the transition from step 1 to step 2 is rejected. An off-by-one on the
+    input variables was the obvious guess and it is wrong -- shifting every
+    input by one step in either direction fails too. The cause is not
+    established, so this refuses rather than emit a trail that does not hold.
     """
     head = text.lstrip().split("\n", 1)[0].strip()
     if head == "counterexample":

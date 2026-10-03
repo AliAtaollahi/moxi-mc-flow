@@ -123,12 +123,13 @@ verdict, and plain SMT-LIB:
 
     python3 src/tool2moxiwit.py inv.txt --task task.moxi --from ic3ia -o proof.mxw
 
-`src/chcsol2moxicert.py` does the same for a CHC solver's solution, which is a
-`define-fun` per predicate. The solution is carried through as the `define-fun`
-the solver wrote, and the certificate applies it to the system's variables:
+`src/chcwit2moxiwit.py` does the same for a CHC solver, which answers twice
+over. `sat` is a model -- a `define-fun` per predicate, in SMT-LIB or in
+Eldarica's Prolog -- carried through as the command the solver wrote, with the
+certificate applying it to the system's variables. `unsat` is a derivation, and
+for a linear Horn problem a derivation is a path, so it becomes a `:trail`:
 
-    python3 src/chcsol2moxicert.py solution.txt --task task.moxi \
-        --system main --query qry_rch_0 -o proof.mxw
+    python3 src/chcwit2moxiwit.py answer.txt --task task.moxi -o witness.mxw
 
 `src/moxi2chc.py` writes a MoXI task back out as Horn clauses over a single
 predicate. This is how a Horn problem with several predicates gets a

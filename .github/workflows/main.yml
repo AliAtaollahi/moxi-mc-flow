@@ -45,10 +45,10 @@ jobs:
         cd test/
         python3 test.py parse_moxiwit.json
 
-    - name: chcsol2moxicert
+    - name: chcwit2moxiwit
       run: |
         cd test/
-        python3 test.py chcsol2moxicert.json
+        python3 test.py chcwit2moxiwit.json
 
     - name: tool2moxiwit
       run: |

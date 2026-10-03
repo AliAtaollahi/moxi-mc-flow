@@ -17,7 +17,7 @@ predicate:
     P(x) /\\ reachable(x)    -> false
 
 A CHC solver run on *this* answers with one `define-fun` whose arguments are the
-system's own variables, which `chcsol2moxicert` turns into a certificate with
+system's own variables, which `chcwit2moxiwit` turns into a certificate with
 nothing left to guess. The invariant is then about the system the certificate
 is checked against, which is what a certificate is supposed to be about.
 
