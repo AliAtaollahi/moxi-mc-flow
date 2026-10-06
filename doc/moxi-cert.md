@@ -401,12 +401,17 @@ and `.init`; `-e ic3bits` and `-e ic3sa` often reach for `.next`.
 ### 5.1 AVR `inv.txt`
 
 AVR's own **infix** syntax over the names its Btor2 front end made, printed by
-`Reach::print_sorted_list`. Its source also has an `inv.smt2` writer behind the
-`PRINT_INV_SMT2` compile flag, and that output is SMT-LIB with a VMT
-`:invar-property` annotation, which §4.8 reads directly. Building AVR with that
-flag is the cheap way in; parsing the infix form is not. AVR cannot be built on
-this machine — its `build.sh` begins with `sudo apt install` — so nothing was
-written that could not be run against the tool.
+`Reach::print_sorted_list`. Its source also writes `inv.smt2`, under
+`PRINT_INV_SMT2`, which `reach_core.h` turns on whenever AVR is built with the
+MathSAT backend (`_M5`); that output is SMT-LIB and §4.8 reads it with no new
+code. So the format is already supported and what is missing is a build.
+
+Building it was tried. The `sudo apt install` its `build.sh` opens with turns
+out to be skippable — the packages are already here — but **AVR does not
+compile against current Yices 2**: `reach_y2.cpp` uses `STATUS_SAT` and
+`STATUS_UNSAT`, which the Yices headers no longer declare. Pinning Yices to the
+revision AVR expects is the way in and was not pursued here. Nothing is written
+that cannot be run against the tool.
 
 ### 5.2 nuXmv
 
