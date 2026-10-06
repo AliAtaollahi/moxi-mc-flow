@@ -154,6 +154,22 @@
                 "inv/pono-shift_add_2bit.moxi"
             ],
             "expected_returncode": 1
+        },
+        {
+            "input": "inv/pono-twincells-ic3ia.inv",
+            "options": [
+                "--task",
+                "moxi/QF_BV/TwinCells.moxi",
+                "--btor2",
+                "inv/pono-twincells.btor2"
+            ],
+            "output": "inv/pono-twincells-ic3ia.mxw",
+            "expected_output": [
+                [
+                    "inv/pono-twincells-ic3ia.mxw.expect",
+                    "inv/pono-twincells-ic3ia.mxw"
+                ]
+            ]
         }
     ]
 }

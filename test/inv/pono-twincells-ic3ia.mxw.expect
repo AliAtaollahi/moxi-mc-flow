@@ -1,0 +1,12 @@
+(define-system pono_aux
+   :local ((d.init (_ BitVec 1)) (x.init (_ BitVec 1)) (y.init (_ BitVec 1)) (L.shadow.init (_ BitVec 1)) (R.shadow.init (_ BitVec 1)) (disagree__FLAG__ (_ BitVec 1)))
+   :init (and (= d.init d) (= x.init x) (= y.init y) (= L.shadow.init L.shadow) (= R.shadow.init R.shadow) (= disagree__FLAG__ #b0))
+   :trans (and (= d.init' d.init) (= x.init' x.init) (= y.init' y.init) (= L.shadow.init' L.shadow.init) (= R.shadow.init' R.shadow.init) (= disagree__FLAG__' (ite (or (= disagree__FLAG__ #b1) (distinct x y)) #b1 #b0)))
+   :inv (and (and (= x.init #b0) (= L.shadow.init #b0)) (and (= y.init #b0) (= R.shadow.init #b0))))
+
+(check-system-response Twin
+:query (q :result unsat :certificate q_cert)
+:certificate (q_cert
+	:aux pono_aux
+	(let ((_let0 (= L.shadow L.shadow.init))) (let ((_let1 (= x x.init))) (let ((_let2 (= R.shadow R.shadow.init))) (let ((_let3 (= y y.init))) (and (and (and (and (and true (or (not _let0) _let2)) (or (not _let1) _let3)) (or (not _let2) _let0)) (or (not _let3) _let1)) (not (= disagree__FLAG__ #b1))))))))
+)

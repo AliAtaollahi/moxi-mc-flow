@@ -347,12 +347,31 @@ def pono_certificate(
     that mentions one is refused rather than guessed at.
     """
     nodes, booleans = btor2_map(btor2)
-    flat = moxi_flatten.flattened(task_text)
-    name = moxi_task.system_name(flat)
-    system = moxi_flatten.systems(flat)[name]
-    sorts = dict(moxi_task.declared_variables(flat))
-    reachable = moxi_task.reachable_definitions(flat)
+    name = moxi_task.system_name(task_text)
+    system = moxi_flatten.systems(task_text)[name]
+    sorts = dict(moxi_task.declared_variables(task_text))
+    reachable = moxi_task.reachable_definitions(task_text)
     used, declarations, init, trans, inv = {}, [], [], [], []
+
+    def composed(variable: str) -> Optional[str]:
+        """The Btor2 name as the composed task spells the same variable.
+
+        `moxi2btor` scopes a variable that belongs to an instance by the chain
+        of systems it sits in, starting with the one being checked:
+        `Monitor::C1::C1::set`. The composition in `moxi_flatten` names the
+        same variable after the chain of *instances*, `C1.C1.set`. So the two
+        descriptions agree once the checked system is dropped from the front
+        and the separators are changed -- the only reason they were ever
+        different is that each was written without the other in mind.
+        """
+        if variable in sorts:
+            return variable
+        parts = variable.split("::")
+        if len(parts) > 1 and parts[0] == moxi_task.bare(name):
+            candidate = moxi_task.quoted(".".join(parts[1:]))
+            if candidate in sorts:
+                return candidate
+        return None
 
     def declare(symbol: str, sort: str) -> bool:
         """Declare an auxiliary variable once; True the first time."""
@@ -395,17 +414,11 @@ def pono_certificate(
         for suffix in (".cur", ".init", ".next"):
             if not btor_name.endswith(suffix):
                 continue
-            variable = btor_name[: -len(suffix)]
+            variable = composed(btor_name[: -len(suffix)]) or ""
             if variable not in sorts:
                 raise InvariantError(
-                    f"the invariant is about '{variable}', which the task does "
-                    "not declare"
-                    + (
-                        "; it is a variable of a subsystem, and a witness "
-                        "speaks only the names the check-system command gives"
-                        if "::" in variable
-                        else ""
-                    )
+                    f"the invariant is about '{btor_name[: -len(suffix)]}', "
+                    "which is not a variable of the task, composed or not"
                 )
             if suffix == ".cur":
                 return view(variable, sorts[variable])
@@ -734,6 +747,10 @@ def translate(
     if dialect not in DIALECTS:
         raise InvariantError(f"'{dialect}' is not a dialect this reads")
 
+    # A response may speak only the names the `check-system` command declares,
+    # and for a task with subsystems that command is the composed one -- which
+    # is the same bytes when there is nothing to compose.
+    task_text = moxi_flatten.flattened(task_text)
     names = moxi_task.declared_variables(task_text)
     reachable = moxi_task.reachable_definitions(task_text)
     asked = moxi_task.queries(task_text)

@@ -1,0 +1,26 @@
+(set-logic QF_BV)
+
+; A one-bit cell that passes its input on after two steps, through a local of
+; its own that nothing outside it can name.
+(define-system Cell :input ( (d (_ BitVec 1)) ) :output ( (q (_ BitVec 1)) )
+  :local ( (shadow (_ BitVec 1)) )
+  :init (and (= q #b0) (= shadow #b0))
+  :trans (and (= shadow' d) (= q' shadow))
+  :inv true
+)
+
+; Two of them, fed the same input, so they agree for ever -- and seeing that
+; needs the two shadows, which exist only after the composition names them.
+(define-system Twin :input ( (d (_ BitVec 1)) ) :output ( (x (_ BitVec 1)) (y (_ BitVec 1)) )
+  :local ()
+  :subsys (L (Cell d x))
+  :subsys (R (Cell d y))
+)
+
+(check-system Twin
+  :input ( (d (_ BitVec 1)) )
+  :output ( (x (_ BitVec 1)) (y (_ BitVec 1)) )
+  :local ()
+  :reachable (disagree (distinct x y))
+  :query (q (disagree))
+)

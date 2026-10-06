@@ -387,13 +387,31 @@ step; so the machine has to carry `:init` as its own `:inv`, not only as its
 which does not start from an initial state, and a perfectly good pono invariant
 is refuted.
 
-All three are monitors in the sense §2 requires — each is determined by what
-the system does — so `validate_monitor` passes them and the product is sound.
-`X.next` is **not**: it is the successor's value, which the present state does
+A Btor2 name may be **scoped**, because a variable belonging to an instance is
+written as the chain of systems it sits in: `Twin::L::shadow`. The composition
+of §9 names the same variable after the chain of *instances*, `L.shadow`. The
+two descriptions agree once the checked system is dropped from the front and
+the separators are changed, which is all the reader does — they were only ever
+different because each was written without the other in mind. So a pono
+invariant about a task with subsystems reads, and it is a certificate for the
+composed task, which is the one to check it against.
+
+All three extra states are monitors in the sense §2 requires — each is
+determined by what the system does — so `validate_monitor` passes them and the
+product is sound. `X.next` is **not**: it is the successor's value, which the present state does
 not fix. That is a prophecy variable, composing it would narrow what the system
 may do, and an invariant mentioning one is refused with that reason rather than
 guessed at. In practice `-e ic3ia` and `-e mbic3` usually stay inside `.cur`
 and `.init`; `-e ic3bits` and `-e ic3sa` often reach for `.next`.
+
+One thing a checker has to be able to do for any of this to be reachable on a
+VMT-derived task: read a **mixed** logic. MoXI's logic table has no entry that
+mixes integers and reals, so a task that needs one — a VMT translation lifting
+integer literals with `to_real` is the case that arises — can only say `ALL`.
+A checker that refuses `ALL` cannot load the task at all, certificate or no
+certificate. Reading it needs nothing clever: SMT-LIB's own spelling says which
+sort a literal is, `#b…` for a bit-vector, a point for a real, a bare numeral
+for an integer, which is exactly why `to_real` is there.
 
 
 ## 5. What we cannot read, and exactly why
