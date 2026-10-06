@@ -308,7 +308,7 @@ checkable, and nothing yet writes it but a person.
 A bare term, a `(define-fun name () Bool body)`, or a VMT
 `(! <term> :invar-property N)` annotation. This is the general escape hatch,
 and it is why a tool that already speaks SMT-LIB needs no new code here. It is
-also the route AVR's `inv.smt2` would take (§5.2).
+also the route AVR's `inv.smt2` would take (§5.1).
 
 ### 4.9 Btor2 and MoXI itself
 
@@ -319,24 +319,86 @@ flow wrote — or MoXIchecker's `--witness` — can be normalised, re-checked, o
 handed on. Round trips are byte-identical, which is how the two spellings are
 kept honest.
 
+### 4.10 ic3ia counterexample — `ic3ia -w`
+
+A failing property gets `counterexample` and one `;; step N` block per step,
+each an `(and ...)`. This was refused in an earlier draft of this document, on
+the reading that the blocks were cubes of the predicate abstraction and so not
+states at all. The source says otherwise. `Refiner::counterexample` in
+`ia.cpp` walks the state and input variables at every time point of the
+unrolling that *confirmed* the path and records the value the model gave each
+of them, so every block comes from one coherent model and the steps really are
+a path. Three things keep a block from being a complete state:
+
+* a variable whose model value is the variable itself is a don't care, and
+  ic3ia leaves it out;
+* the last step records the state variables only — no transition leaves it —
+  so the inputs are missing there;
+* a block may carry a constraint rather than an assignment, `(= a b)` between
+  two variables or `(<= 0 x)`.
+
+From the trail's side all three are the same thing: a variable with no value.
+Nothing stands in the way of that, because **a state of a `:trail` does not
+have to assign every variable**. What it leaves open the checker solves for,
+over the same `:init` and `:trans` it would use anyway, so dropping a
+constraint only widens the set of paths the trail describes and a confirmation
+still means a real path was found. The cost is that the check does that much
+searching — bounded by the length of the path — rather than replaying a fully
+determined run.
+
+    counterexample                     (0 (x_0 0))
+    ;; step 0                 ===>     (1 (x_0 (- 1)))
+    (and (= x_0 0) (<= 0 x_0))
+    ;; step 1                          the `(<= 0 x_0)` is a constraint,
+    (and (= x_0 (- 1)))                not a value, and is left out
+
+A counterexample that *loops back* is a lasso rather than a path. MoXI has a
+`:lasso` beside `:prefix` for exactly that and nothing here writes one yet, so
+`;; loopback step N` is refused by name.
+
+### 4.11 Pono `--show-invar`
+
+Pono prints an SMT-LIB term over the Btor2 **node numbers**: it ignores the
+symbols a Btor2 file gives its states and calls node *N* `stateN`.
+
+    INVAR: (and (and true (= #b0 ((_ extract 0 0) state4))) (not (= state30 #b1)))
+
+The numbering is ours, because the Btor2 came out of `moxi2btor`, so the file
+that was checked *is* the map — the difference from `horn2vmt`, whose fold map
+is written down nowhere (§6). Reading it needs the file, which is why the
+dialect takes `--btor2`.
+
+What the map gives back is a Btor2 name, and `moxi2btor` makes three states out
+of every MoXI variable. `X.cur` is the variable. The other two are not
+variables of the MoXI system, and each becomes state of an `:aux` machine that
+does exactly what the encoding does with it:
+
+| Btor2 state | what it is | how the machine says it |
+| --- | --- | --- |
+| `X.bv` | the one-bit view of a `Bool`, since Btor2 has no Booleans | `:inv (= X.bv (ite X #b1 #b0))` |
+| `X.init` | the value `X` had at step 0 | fixed at the start, never changed, **and `:init` asked of the copies at every step** |
+| `r__FLAG__` | the latch the reachability condition sits behind | `:init (= flag #b0)`, `:trans (= flag' (or flag r))` |
+
+The emphasis on `X.init` is the part that is easy to get wrong and was got
+wrong first. `moxi2btor` builds the system's whole `:init` over the `.init`
+copies rather than over the variables, and a Btor2 `constraint` holds at every
+step; so the machine has to carry `:init` as its own `:inv`, not only as its
+`:init`. Without that the copies are free constants in a consecution query,
+which does not start from an initial state, and a perfectly good pono invariant
+is refuted.
+
+All three are monitors in the sense §2 requires — each is determined by what
+the system does — so `validate_monitor` passes them and the product is sound.
+`X.next` is **not**: it is the successor's value, which the present state does
+not fix. That is a prophecy variable, composing it would narrow what the system
+may do, and an invariant mentioning one is refused with that reason rather than
+guessed at. In practice `-e ic3ia` and `-e mbic3` usually stay inside `.cur`
+and `.init`; `-e ic3bits` and `-e ic3sa` often reach for `.next`.
+
 
 ## 5. What we cannot read, and exactly why
 
-### 5.1 Pono `--show-invar`, and Btor2 invariants generally
-
-It prints clean SMT-LIB:
-
-    INVAR: (and (and true (not (= ((_ extract 0 0) state34) #b1))) ...)
-
-but `state34` is a **Btor2 node id**, and the invariant is about the *Btor2
-encoding* `moxi2btor` produces, which splits every MoXI variable into `.cur`,
-`.next` and `.init` copies. So it is a formula over a different transition
-system. Two things are needed: the node map, and then a way to say what the
-extra copies mean — which is `:aux`, now that `:aux` is checkable. Unlike
-`horn2vmt`'s fold the map is ours, so this is work rather than a dead end, and
-it is the next format worth adding.
-
-### 5.2 AVR `inv.txt`
+### 5.1 AVR `inv.txt`
 
 AVR's own **infix** syntax over the names its Btor2 front end made, printed by
 `Reach::print_sorted_list`. Its source also has an `inv.smt2` writer behind the
@@ -346,28 +408,12 @@ flag is the cheap way in; parsing the infix form is not. AVR cannot be built on
 this machine — its `build.sh` begins with `sudo apt install` — so nothing was
 written that could not be run against the tool.
 
-### 5.3 nuXmv
+### 5.2 nuXmv
 
 Prints in SMV expression syntax, which would need the name map `smv2moxi`
 builds as well as a parser. nuXmv is not installed here.
 
-### 5.4 ic3ia counterexamples
-
-`ic3ia -w` prints `;; step N` blocks for a failing property, and most of them
-are **cubes rather than states**: `(= flby__AT0 time__AT0)` relates two
-variables and `(<= 0 time__AT0)` constrains one. A `:trail` lists concrete
-values and has no spelling for a symbolic path, so those cannot be carried at
-all.
-
-On bit-vector problems the blocks *are* complete assignments, and those still
-do not replay: the trail is read, and the transition from step 1 to step 2 is
-rejected. An earlier draft of this document said the cause was an off-by-one
-on the input variables. **That was a guess, and testing refuted it** — shifting
-every input by one step in either direction fails too, at the same place or
-earlier. The cause is not established, so the translator recognises an ic3ia
-counterexample and refuses it rather than emitting a trail that does not hold.
-
-### 5.5 Derivation proofs — Z3 `(get-proof)`, Golem `--proof-format`
+### 5.3 Derivation proofs — Z3 `(get-proof)`, Golem `--proof-format`
 
 This one is a category difference, not a missing parser, and it is worth being
 precise about because §4.3 translates something that is also called a proof.
@@ -392,7 +438,7 @@ Z3/Spacer also has no counterpart to §4.3 at all: its SMT-LIB front end answers
 `unsupported` to `(get-answer)`. So for a failing property, Golem and Eldarica
 give a trail and Z3 gives nothing this format can carry.
 
-### 5.6 Nonlinear problems
+### 5.4 Nonlinear problems
 
 Out of scope throughout, by agreement.
 
@@ -492,20 +538,95 @@ it prints around unchanged values in a trail end up in the file.
 
 ## 8. How much of the benchmark set this covers
 
-Measured over all 8,477 tasks:
+Re-measured over all 8,477 tasks by running `moxi2chc.py` on each of them:
 
-| | tasks | share |
-| --- | ---: | ---: |
-| certificate path open end to end | **4,770** | 56 % |
-| the property fails — a counterexample, not a certificate | 2,447 | 29 % |
-| the system has subsystems | 956 | 11 % |
-| nonlinear | 304 | 4 % |
+| | tasks |
+| --- | ---: |
+| written as Horn clauses over one predicate | **8,477** |
+| refused, for any reason | **0** |
+| of those, composed from subsystems first | 1,875 |
+| of those, needing a name for an instance's own local | 285 |
 
-Of the 6,026 proved tasks — the only ones a certificate exists for — 4,770 are
-covered (79 %), 956 are blocked by subsystems (16 %) and 300 are nonlinear.
-The 956 are all Lustre-derived; `moxi2chc.py` takes a flat system only. They
-are not certificate-less, since MoXIchecker composes subsystems and certifies
-them itself; what they lack is the route that imports another tool's proof.
+Nothing in the task shape blocks the route any more. A `check-system` that
+renames its variables, a query listing several reachability conditions, and a
+`let` that shadows a variable of its own system are each 0 across the set; a
+system with no state variables at all is translated as a nullary predicate.
 
-Nothing else fails: a `check-system` that renames its variables, and a query
-listing several reachability conditions, are 0 across all 8,477.
+What a task is *labelled* decides which witness it can have: 4,106 are
+unreachable, so a certificate exists; 2,854 are reachable, so a counterexample
+does; 1,517 carry no verdict. 304 tasks are nonlinear — 43 of them unreachable
+— and are out of scope by agreement, not by any limit here.
+
+The 285 are the only ones where the witness is not immediately a witness for
+the file as it was written: composing gave a name to a variable that had none,
+so the certificate speaks of the composed task. `moxi2chc --flat` writes that
+task out, and it is an ordinary MoXI file. For the other 1,590 composed tasks
+the flat system declares exactly what the original declared, and a certificate
+for one is a certificate for the other — confirmed on `MESI_3`, where the same
+witness is accepted against both files.
+
+
+## 9. Subsystems: composing is the whole of it
+
+A `define-system` may name instances of other systems with `:subsys`. One
+predicate is one state, and a task with subsystems has several, so the Horn
+form needs them composed — and so does every witness, because a
+`check-system-response` speaks the names the `check-system` command declares
+and nothing else.
+
+The composition is not an approximation of anything. MoXI's semantics for an
+instance is a conjunction: it contributes its `:init`, `:trans` and `:inv` to
+the system that names it, with its input and output formals standing for
+whatever was passed to them and its locals private to the instance. That is
+what `moxi2btor` builds and what MoXIchecker's own loader builds, and
+`moxi_flatten.py` writes the same thing out as an ordinary MoXI file:
+
+    :subsys (D1 (Delay in temp))        :local ((temp Int) (D1.s Int) (D2.s Int))
+    :subsys (D2 (Delay temp out))  ===> :init  (and (= temp 0) (= out 0))
+                                        :trans (and (= temp' D1.s) (= out' D2.s))
+                                        :inv   (and (= D1.s in) (= D2.s temp))
+
+A local of an instance has no name in the original, so it is given one —
+`<instance>.<local>`, nested for nested instances (`Q1.D1.s`), which is the
+spelling the Lustre front end already uses for the variables it hoists — and
+declared in the `check-system` command as well, which keeps the two
+declarations in step. Everything else keeps the name it had.
+
+Three things are checked rather than assumed: that an argument really is a
+variable of the system that passes it, that its sort matches the formal's, and
+that the systems do not contain each other, which is reported as the cycle it
+is. One thing is refused: a `let` inside `:init`, `:trans` or `:inv` that binds
+a name the composition has to rename. Substituting under such a binder would
+move the formula somewhere else entirely; no task in the set does it (`let` and
+`:subsys` never occur in the same file), and a refusal with the name in it beats
+a silent rewrite.
+
+The flat file is a MoXI file, so it is checked by the project's own sort
+checker rather than by trust — `translate.py --validate` accepts it, which is
+also how the primed-variable bug in `vmt2moxi` came to light (§10).
+
+
+## 10. A translation that was not well-formed
+
+`vmt2moxi` turned every VMT `define-fun` into a local variable bound by an
+equation in `:inv`. For a definition whose body speaks of the next state —
+`(define-fun .def_43 () Bool (= time__AT1 flby__AT1))` — that puts a primed
+variable in `:inv`, where MoXI allows none; `sortcheck.py` says so in one line:
+
+    primed variables only allowed in system transition relation (xite__AT0)
+
+It is not a cosmetic breach. `:inv` is asserted at every step, so such an
+equation ties one definition to two different successors at once, and the
+system it describes cannot take two steps: `init /\ trans /\ trans` is
+unsatisfiable for every VMT-derived task tested. Any invariant is then
+vacuously consecutive and any multi-step counterexample is rejected — which is
+exactly what was observed, and was wrongly read as a defect in ic3ia's
+counterexamples (§4.10).
+
+The fix is to put those definitions where what they say is true. A define is
+*next-dependent* if its body mentions a next-state variable, directly or
+through another define that does; those are bound in `:trans`, the rest stay in
+`:inv`. Afterwards all ten VMT test files sort-check, the systems take as many
+steps as they should, and every ic3ia witness they produce — three
+counterexamples of lengths 0, 6 and 8, and three invariants — is confirmed by
+MoXIchecker.
