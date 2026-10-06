@@ -80,6 +80,47 @@ def resolve_next_vars(
         t.replace(primed_var)
 
 
+def next_dependent_defines(vmt_program: vmt.Program) -> set[str]:
+    """The defines whose body speaks of the next state.
+
+    A VMT `define-fun` is a macro, so one that mentions a next-state variable
+    -- directly, or through another define that does -- says something about a
+    *transition*, not about a state. MoXI keeps those apart: a primed variable
+    may appear in `:trans` and nowhere else. Binding such a define in `:inv`,
+    which is what this used to do, puts a prime where the language does not
+    allow one; the sort checker says so, and a system built that way cannot
+    take two steps, because `:inv` then ties the same definition to two
+    different successors at once.
+    """
+    bodies = {symbol: term for symbol, (_, term) in vmt_program.funs.items()}
+    dependent: set[str] = set()
+    mentions: dict[str, set[str]] = {}
+    for symbol, term in bodies.items():
+        named: set[str] = set()
+        stack, seen = [term], set()
+        while stack:
+            cur = stack.pop()
+            if id(cur) in seen:
+                continue
+            seen.add(id(cur))
+            if isinstance(cur, moxi.Variable):
+                if cur.symbol in vmt_program.prev:
+                    dependent.add(symbol)
+                elif cur.symbol in bodies:
+                    named.add(cur.symbol)
+            stack.extend(cur.children)
+        mentions[symbol] = named
+
+    changed = True
+    while changed:
+        changed = False
+        for symbol, named in mentions.items():
+            if symbol not in dependent and named & dependent:
+                dependent.add(symbol)
+                changed = True
+    return dependent
+
+
 def translate(
     vmt_program: vmt.Program, with_lets: bool = False
 ) -> Optional[moxi.Program]:
@@ -109,18 +150,27 @@ def translate(
     resolve_next_vars(moxi_trans_term, context, vmt_program.prev)
     moxi.remove_term_attrs(moxi_trans_term, context)
 
-    # Inv term
+    # Inv term. A define that speaks of the next state is bound in ':trans',
+    # where a prime is allowed and where what it says actually holds; the rest
+    # are state equations and belong in ':inv'.
     if with_lets:
         moxi_inv_term = moxi.Constant.Bool(True)
     else:
-        moxi_inv_term = moxi.conjoin_list(
-            [
-                moxi.Apply.Eq([moxi.Variable(srt, sym, False), trm])
-                for sym, (srt, trm) in vmt_program.funs.items()
-            ]
-        )
-        resolve_next_vars(moxi_inv_term, context, vmt_program.prev)
+        stepwise_defines = next_dependent_defines(vmt_program)
+        pointwise, stepwise = [], []
+        for sym, (srt, trm) in vmt_program.funs.items():
+            equation = moxi.Apply.Eq([moxi.Variable(srt, sym, False), trm])
+            if sym in stepwise_defines:
+                stepwise.append(equation)
+            else:
+                pointwise.append(equation)
+        moxi_inv_term = moxi.conjoin_list(pointwise)
         moxi.remove_term_attrs(moxi_inv_term, context)
+        if stepwise:
+            bound = moxi.conjoin_list(stepwise)
+            resolve_next_vars(bound, context, vmt_program.prev)
+            moxi.remove_term_attrs(bound, context)
+            moxi_trans_term = moxi.conjoin_list([moxi_trans_term, bound])
 
     system = moxi.DefineSystem(
         "main",
