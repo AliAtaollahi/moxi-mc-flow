@@ -1,0 +1,10 @@
+counterexample
+;; step 0
+(and
+  (= x_0 0)
+  (<= 0 x_0)
+)
+;; step 1
+(and
+  (= x_0 (- 1))
+)

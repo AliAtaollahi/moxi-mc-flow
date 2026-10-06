@@ -11,12 +11,12 @@ what another found.
 
 Dialects:
 
-`ic3ia`   what `ic3ia -w` prints: the line `invariant` followed by one
-          `;; clause N` block per clause, each an SMT-LIB `(or ...)`. The
-          invariant is their conjunction. Names are the VMT ones, which
-          `vmt2moxi` keeps, so they already are the system's. The same option
-          prints `counterexample` when the property fails; that is recognised
-          and refused, see `ic3ia_blocks`.
+`ic3ia`   what `ic3ia -w` prints. For a property that holds, the line
+          `invariant` followed by one `;; clause N` block per clause, each an
+          SMT-LIB `(or ...)`; the invariant is their conjunction. For one that
+          fails, `counterexample` and one `;; step N` block per step, each an
+          `(and ...)`, which becomes a `:trail`. Names are the VMT ones, which
+          `vmt2moxi` keeps, so they already are the system's.
 
 `kind2`   what Kind 2's MoXI front end (`kmoxi`) prints: a whole
           `check-system-response`, for either verdict.
@@ -64,13 +64,20 @@ if __name__ == "__main__" and __package__ is None:
     # Run as a script (the test harness does), not only imported as a module.
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from src import log, moxi_task, moxi_witness, parse_moxiwit
+from src import log, moxi_flatten, moxi_task, moxi_witness, parse_moxiwit
 
 FILE_NAME = pathlib.Path(__file__).name
 
-DIALECTS = ("auto", "ic3ia", "kind2", "smtlib")
+DIALECTS = ("auto", "ic3ia", "kind2", "pono", "smtlib")
 
-_IC3IA_BLOCK = re.compile(r"^;;\s*(clause|step)\s+(\d+)\s*$", re.MULTILINE)
+_IC3IA_BLOCK = re.compile(
+    r"^;;\s*(loopback\s+)?(clause|step)\s+(\d+)\s*$", re.MULTILINE
+)
+# What MathSAT prints where a model has a value. Anything else in a step
+# is a constraint, not an assignment, and is left out of the trail.
+_ATOMIC_VALUE = re.compile(
+    r"^(true|false|#b[01]+|#x[0-9a-fA-F]+|[0-9]+(\.[0-9]+)?)$"
+)
 _DEFINE_FUN = re.compile(r"\(\s*define-fun\b")
 _INVAR_PROPERTY = re.compile(r":invar-property\b")
 
@@ -107,6 +114,8 @@ def dialect_of(text: str) -> str:
     """Which tool wrote `text`."""
     if "check-system-response" in text:
         return "kind2"
+    if "INVAR:" in text:
+        return "pono"
     head = text.lstrip().split("\n", 1)[0].strip()
     if head in ("invariant", "counterexample"):
         return "ic3ia"
@@ -122,33 +131,25 @@ def ic3ia_blocks(text: str) -> tuple[str, list[str]]:
     """What `ic3ia -w` printed: its verdict and one s-expression per block.
 
     The blocks are numbered and the numbers are checked, because an invariant
-    with a clause left out is not a shorter invariant, it is a weaker one.
-
-    A counterexample is recognised and refused. Most of its `;; step` blocks
-    are cubes rather than states -- `(= a b)` relates two variables and
-    `(<= 0 x)` constrains one -- and a `:trail` lists concrete values, with no
-    spelling for a symbolic path. On bit-vector problems the blocks *are*
-    complete assignments, and those still do not replay: the trail reads, and
-    the transition from step 1 to step 2 is rejected. An off-by-one on the
-    input variables was the obvious guess and it is wrong -- shifting every
-    input by one step in either direction fails too. The cause is not
-    established, so this refuses rather than emit a trail that does not hold.
+    with a clause left out is not a shorter invariant, it is a weaker one, and
+    a path with a step left out is not a path.
     """
     head = text.lstrip().split("\n", 1)[0].strip()
-    if head == "counterexample":
+    if head not in ("invariant", "counterexample"):
         raise InvariantError(
-            "ic3ia printed a counterexample, not an invariant, and its steps "
-            "are cubes rather than states: a ':trail' cannot carry them"
+            f"'{head}' is not what ic3ia prints: expected 'invariant' or "
+            "'counterexample' on the first line"
         )
-    if head != "invariant":
-        raise InvariantError(
-            f"'{head}' is not what ic3ia prints: expected 'invariant' on the "
-            "first line"
-        )
+    wanted = "clause" if head == "invariant" else "step"
     blocks, expected = [], 0
     for match in _IC3IA_BLOCK.finditer(text):
-        label, index = match.group(1), int(match.group(2))
-        if (label == "clause") != (head == "invariant"):
+        loopback, label, index = match.group(1), match.group(2), int(match.group(3))
+        if loopback:
+            raise InvariantError(
+                "the counterexample loops back, so it is a lasso rather than a "
+                "path; MoXI has a ':lasso' for that and nothing here writes one"
+            )
+        if label != wanted:
             raise InvariantError(f"a '{head}' cannot hold a '{label}'")
         if index != expected:
             raise InvariantError(
@@ -163,6 +164,299 @@ def ic3ia_blocks(text: str) -> tuple[str, list[str]]:
     if not blocks:
         raise InvariantError(f"the {head} has no blocks")
     return head, blocks
+
+
+def _is_value(term: str) -> bool:
+    """Whether `term` is something a model assigns, rather than a constraint."""
+    term = term.strip()
+    if _ATOMIC_VALUE.match(term):
+        return True
+    if not term.startswith("("):
+        return False
+    items = parse_moxiwit._items(term)
+    if len(items) == 2 and items[0] == "-":
+        return _is_value(items[1])
+    if len(items) == 3 and items[0] == "/":
+        return _is_value(items[1]) and _is_value(items[2])
+    if len(items) == 3 and items[0] == "_" and items[1].startswith("bv"):
+        return True
+    return False
+
+
+def _ic3ia_assignment(conjunct: str, names: set) -> Optional[tuple[str, str]]:
+    """The variable and value a conjunct of a step fixes, if it fixes one."""
+    term = conjunct.strip()
+    if term in names:
+        return term, "true"
+    if not term.startswith("("):
+        return None
+    items = parse_moxiwit._items(term)
+    if len(items) == 2 and items[0] == "not" and items[1] in names:
+        return items[1], "false"
+    if len(items) == 3 and items[0] == "=":
+        left, right = items[1], items[2]
+        if left in names and _is_value(right):
+            return left, right
+        if right in names and _is_value(left):
+            return right, left
+    return None
+
+
+def ic3ia_trail(blocks: list[str], names: set, query: str) -> moxi_witness.Trail:
+    """The `;; step` blocks as a trail over the task's variables.
+
+    Each block comes from one model of one bounded query -- `Refiner::
+    counterexample` in `ia.cpp` walks the state and input variables at every
+    time point of the unrolling that confirmed the path and records the value
+    the model gave each of them -- so the steps are a single coherent path and
+    not representatives picked one at a time. Three things keep a block from
+    being a complete state, and all three are the same thing from the trail's
+    side, a variable with no value:
+
+    * a variable whose model value is the variable itself is a don't care and
+      ic3ia leaves it out;
+    * the last step records the state variables only, since no transition
+      leaves it, so the inputs are missing there;
+    * a block may carry a constraint rather than an assignment -- `(= a b)`
+      between two variables, `(<= 0 x)` -- which `:trail` has no spelling for.
+
+    None of that is in the way, because a state of a trail does not have to
+    assign every variable: what it leaves open the checker solves for, over
+    the same `:init` and `:trans` it would use anyway. Dropping a constraint
+    only widens the set of paths the trail describes, so a confirmation still
+    means a real path was found; what it costs is that the check does that
+    much searching, bounded by the length of the path, instead of replaying a
+    fully determined one.
+
+    This replaces an earlier reading of these blocks as cubes that could not be
+    carried at all, which was wrong on both counts.
+    """
+    states = []
+    for index, block in enumerate(blocks):
+        items = parse_moxiwit._items(block)
+        if not items or items[0] != "and":
+            raise InvariantError(f"step {index} is not a conjunction")
+        assigns: list[moxi_witness.Assignment] = []
+        fixed: dict[str, str] = {}
+        for conjunct in items[1:]:
+            pair = _ic3ia_assignment(conjunct, names)
+            if pair is None:
+                continue
+            name, value = pair
+            if name in fixed:
+                if fixed[name] != value:
+                    raise InvariantError(
+                        f"step {index} gives '{name}' both {fixed[name]} and "
+                        f"{value}"
+                    )
+                continue
+            fixed[name] = value
+            assigns.append(moxi_witness.Assignment(name, value))
+        states.append(moxi_witness.State(index, assigns, []))
+    return moxi_witness.Trail(f"{query}_trail", states)
+
+
+# --------------------------------------------------------------------------
+# Pono
+# --------------------------------------------------------------------------
+
+# `pono --show-invar` prints an SMT-LIB term over the Btor2 *node numbers*: it
+# ignores the symbols a Btor2 file gives its states and calls node N `stateN`.
+# The numbering is ours, because the Btor2 came out of `moxi2btor`, so the file
+# that was checked is the map -- which is the difference from `horn2vmt`, whose
+# fold map is not written down anywhere.
+_PONO_NODE = re.compile(r"\bstate(\d+)\b")
+_BTOR2_NAMED = re.compile(r"^(\d+)\s+(?:state|input)\s+\d+\s+(\S+)\s*$")
+_BTOR2_BOOLEAN = re.compile(r"^;\s*B\s+(\S+)\s*$")
+
+# `moxi2btor` gives every MoXI variable three Btor2 states: `.cur` is the
+# variable, `.next` is its value in the successor, and `.init` is a state with
+# no next-state function, initialised to the variable, so it holds the value
+# the variable had at step 0 for ever.
+AUX_SYSTEM = "pono_aux"
+# Every bit-vector operator SMT-LIB names, so a warning about a name the task
+# does not declare is about a *variable* and not about arithmetic.
+BV_OPERATORS = (
+    "bvnot bvneg bvand bvor bvxor bvnand bvnor bvxnor bvadd bvsub bvmul "
+    "bvudiv bvurem bvsdiv bvsrem bvsmod bvshl bvlshr bvashr bvult bvule "
+    "bvugt bvuge bvslt bvsle bvsgt bvsge bvcomp"
+)
+BIT = "(_ BitVec 1)"
+
+
+def btor2_map(text: str) -> tuple[dict[str, str], set[str]]:
+    """What pono's node names stand for, and which variables are Boolean.
+
+    `moxi2btor` writes a `; B name` comment for each Boolean variable, because
+    Btor2 has no Booleans and a MoXI `Bool` becomes a one-bit vector; the same
+    comments are what `btorwit2moxiwit` reads a Btor2 witness back with.
+    """
+    nodes, booleans = {}, set()
+    for line in text.splitlines():
+        boolean = _BTOR2_BOOLEAN.match(line)
+        if boolean:
+            booleans.add(boolean.group(1))
+            continue
+        named = _BTOR2_NAMED.match(line)
+        if named:
+            nodes[f"state{named.group(1)}"] = named.group(2)
+    if not nodes:
+        raise InvariantError("the Btor2 file names no states")
+    return nodes, booleans
+
+
+def pono_invariant(text: str) -> str:
+    """The term on pono's `INVAR:` line."""
+    for line in text.splitlines():
+        if line.startswith("INVAR:"):
+            return line[len("INVAR:"):].strip()
+    if "does not support getting the invariant" in text:
+        raise InvariantError(
+            "the engine pono was asked to use does not produce an invariant; "
+            "-e mbic3, ic3bits, ic3ia or ic3sa does"
+        )
+    raise InvariantError("pono printed no 'INVAR:' line; run it with --show-invar")
+
+
+def pono_certificate(
+    invariant: str, btor2: str, task_text: str
+) -> tuple[str, str]:
+    """pono's invariant as a formula over the task, and the machine it needs.
+
+    Three of the Btor2 states are not variables of the MoXI system, and each
+    becomes a variable of an `:aux` machine that reproduces exactly what the
+    Btor2 encoding does with it:
+
+    * `X.bv` -- the one-bit view of a Boolean `X`, which is what Btor2 has in
+      place of a `Bool`. A function of `X`, so a `:inv` of the machine.
+    * `X.init` -- the value `X` had at step 0. `moxi2btor` builds the whole
+      system's `:init` over these rather than over the variables, and a Btor2
+      `constraint` holds at every step, so the machine says the same: the
+      copies are fixed at the start, never change, and satisfy `:init`
+      *everywhere*. Leaving that last part out is enough to make a perfectly
+      good pono invariant fail consecution, because the copies are then free
+      constants in a query that does not start from an initial state.
+    * `r__FLAG__` -- the latch `moxi2btor` puts the reachability condition
+      behind, because MoXI lets `:reachable` speak of primed inputs while a
+      Btor2 `bad` is a state formula. `flag' = flag or r`.
+
+    All three are monitors in the sense `validate_monitor` asks about: each is
+    determined by what the system does, so the machine can start wherever the
+    system starts and follow wherever it goes. `X.next` is not -- it is the
+    successor's value, which the present state does not fix -- and an invariant
+    that mentions one is refused rather than guessed at.
+    """
+    nodes, booleans = btor2_map(btor2)
+    flat = moxi_flatten.flattened(task_text)
+    name = moxi_task.system_name(flat)
+    system = moxi_flatten.systems(flat)[name]
+    sorts = dict(moxi_task.declared_variables(flat))
+    reachable = moxi_task.reachable_definitions(flat)
+    used, declarations, init, trans, inv = {}, [], [], [], []
+
+    def declare(symbol: str, sort: str) -> bool:
+        """Declare an auxiliary variable once; True the first time."""
+        if symbol in used:
+            return False
+        used[symbol] = True
+        declarations.append((symbol, sort))
+        return True
+
+    def view(symbol: str, sort: str) -> str:
+        """The Btor2 reading of a term: itself, or its one-bit view."""
+        if sort != "Bool":
+            return symbol
+        name = moxi_task.derived(symbol, ".bv")
+        if declare(name, BIT):
+            inv.append(f"(= {name} (ite {symbol} #b1 #b0))")
+        return name
+
+    def frozen() -> None:
+        """The step-0 copy of every variable, with `:init` asked of it."""
+        if "" in used:
+            return
+        used[""] = True
+        renaming = {}
+        for symbol, sort in sorts.items():
+            copy = moxi_task.derived(symbol, ".init")
+            declare(copy, sort)
+            init.append(f"(= {copy} {symbol})")
+            trans.append(f"(= {copy}' {copy})")
+            renaming[symbol] = copy
+        inv.append(moxi_task.substituted(system["init"], renaming))
+
+    def translate(node: str) -> str:
+        if node not in nodes:
+            raise InvariantError(
+                f"the invariant names '{node}', which the Btor2 file does not "
+                "declare; it has to be the file pono was run on"
+            )
+        btor_name = nodes[node]
+        for suffix in (".cur", ".init", ".next"):
+            if not btor_name.endswith(suffix):
+                continue
+            variable = btor_name[: -len(suffix)]
+            if variable not in sorts:
+                raise InvariantError(
+                    f"the invariant is about '{variable}', which the task does "
+                    "not declare"
+                    + (
+                        "; it is a variable of a subsystem, and a witness "
+                        "speaks only the names the check-system command gives"
+                        if "::" in variable
+                        else ""
+                    )
+                )
+            if suffix == ".cur":
+                return view(variable, sorts[variable])
+            if suffix == ".next":
+                raise InvariantError(
+                    f"the invariant is about '{btor_name}', the value "
+                    f"'{variable}' takes in the next state, which this state "
+                    "does not fix: that is a prophecy variable rather than a "
+                    "monitor, and composing it would narrow what the system "
+                    "may do"
+                )
+            frozen()
+            return view(moxi_task.derived(variable, ".init"), sorts[variable])
+        if btor_name.endswith("__FLAG__"):
+            symbol = btor_name[: -len("__FLAG__")]
+            condition = reachable.get(symbol)
+            if condition is None:
+                raise InvariantError(
+                    f"the invariant names the latch of '{symbol}', which is "
+                    "not a ':reachable' condition of the task"
+                )
+            btor_name = moxi_task.quoted(btor_name)
+            if declare(btor_name, BIT):
+                init.append(f"(= {btor_name} #b0)")
+                trans.append(
+                    f"(= {btor_name}' (ite (or (= {btor_name} #b1) "
+                    f"{condition}) #b1 #b0))"
+                )
+            return btor_name
+        raise InvariantError(
+            f"the invariant names the Btor2 state '{btor_name}', which is none "
+            "of the copies the encoding makes of a MoXI variable"
+        )
+
+    formula = _PONO_NODE.sub(lambda m: translate(m.group(0)), invariant)
+    if not declarations:
+        return formula, ""
+    machine = (
+        f"(define-system {AUX_SYSTEM}\n"
+        f"   :local ({' '.join(f'({n} {s})' for n, s in declarations)})\n"
+        f"   :init {_conjoined(init)}\n"
+        f"   :trans {_conjoined(trans)}\n"
+        f"   :inv {_conjoined(inv)})"
+    )
+    return formula, machine
+
+
+def _conjoined(parts: list[str]) -> str:
+    if not parts:
+        return "true"
+    return parts[0] if len(parts) == 1 else "(and " + " ".join(parts) + ")"
 
 
 # --------------------------------------------------------------------------
@@ -376,6 +670,19 @@ def smtlib_formula(text: str) -> str:
 # --------------------------------------------------------------------------
 
 
+def _aux_state(machine: str) -> str:
+    """The declarations of the `:aux` machine, or an empty list."""
+    if not machine:
+        return "()"
+    items = parse_moxiwit._items(machine)
+    i = 2
+    while i + 1 < len(items):
+        if items[i] == ":local":
+            return items[i + 1]
+        i += 2
+    return "()"
+
+
 def _undeclared(formula: str, known: set) -> list[str]:
     """Names in `formula` that the task does not declare.
 
@@ -388,7 +695,12 @@ def _undeclared(formula: str, known: set) -> list[str]:
         "and", "or", "not", "=>", "=", "distinct", "ite", "let", "true",
         "false", "<", "<=", ">", ">=", "+", "-", "*", "/", "div", "mod",
         "abs", "to_int", "to_real", "select", "store", "concat", "xor",
-        "Bool", "Int", "Real", "_", "!",
+        "Bool", "Int", "Real", "_", "!", "as", "const", "Array",
+        "extract", "zero_extend", "sign_extend", "repeat", "rotate_left",
+        "rotate_right",
+    }
+    builtin |= {
+        atom for atom in re.findall(r"\w+", BV_OPERATORS) if atom
     }
     out, seen = [], set()
     for atom in re.findall(r"\|[^|]*\||[^\s()]+", formula):
@@ -411,10 +723,14 @@ def translate(
     query: Optional[str] = None,
     k: Optional[int] = None,
     simple_path: bool = False,
+    btor2: Optional[str] = None,
 ) -> moxi_witness.Witness:
     """A whole check-system-response carrying what `text` proves."""
     if dialect == "auto":
-        dialect = dialect_of(text)
+        # A Btor2 file is only ever given for pono, and saying so here means a
+        # run that printed no invariant is reported as that rather than as an
+        # unreadable SMT-LIB file.
+        dialect = "pono" if btor2 is not None else dialect_of(text)
     if dialect not in DIALECTS:
         raise InvariantError(f"'{dialect}' is not a dialect this reads")
 
@@ -423,9 +739,20 @@ def translate(
     asked = moxi_task.queries(task_text)
     system = system or moxi_task.system_name(task_text)
     definitions: list[moxi_witness.Definition] = []
+    machine = ""
 
     if dialect == "ic3ia":
-        _, blocks = ic3ia_blocks(text)
+        verdict, blocks = ic3ia_blocks(text)
+        if verdict == "counterexample":
+            query = query or (asked[0] if asked else "qry")
+            trail = ic3ia_trail(blocks, {n for n, _ in names}, query)
+            trace = moxi_witness.Trace(f"{query}_trace", trail, None)
+            response = moxi_witness.QueryResponse(
+                query, moxi_witness.QueryResult.SAT, None, trace, None
+            )
+            return moxi_witness.Witness(
+                [moxi_witness.CheckSystemResponse(system, [response])]
+            )
         formula = blocks[0] if len(blocks) == 1 else "(and " + " ".join(blocks) + ")"
         depth = 1 if k is None else k
     elif dialect == "kind2":
@@ -459,6 +786,17 @@ def translate(
                 definitions.append(
                     moxi_witness.Definition(symbol, [], "Bool", f"(not {term})")
                 )
+    elif dialect == "pono":
+        if btor2 is None:
+            raise InvariantError(
+                "pono's invariant is written over the node numbers of the "
+                "Btor2 file it was run on, so that file is needed to read it; "
+                "name it with --btor2"
+            )
+        formula, machine = pono_certificate(
+            pono_invariant(text), btor2, task_text
+        )
+        depth = 1 if k is None else k
     else:
         formula = smtlib_formula(text)
         depth = 1 if k is None else k
@@ -469,7 +807,11 @@ def translate(
             f"the task does not ask '{query}'; it asks "
             + ", ".join(asked[:5])
         )
+    # The machine's own state and anything a `let` in the formula binds are
+    # names the task is not expected to declare.
     known = {name for name, _ in names} | set(reachable)
+    known |= {symbol for symbol, _ in parse_moxiwit._declarations(_aux_state(machine))}
+    known |= moxi_task.bound_names(formula)
     unknown = _undeclared(formula, known | {d.symbol for d in definitions})
     if unknown:
         log.warning(
@@ -484,12 +826,14 @@ def translate(
         k=depth,
         simple_path=simple_path,
         definitions=definitions,
+        aux=AUX_SYSTEM if machine else None,
     )
     response = moxi_witness.QueryResponse(
         query, moxi_witness.QueryResult.UNSAT, None, None, certificate
     )
     return moxi_witness.Witness(
-        [moxi_witness.CheckSystemResponse(system, [response])]
+        [moxi_witness.CheckSystemResponse(system, [response])],
+        systems=[machine] if machine else None,
     )
 
 
@@ -514,6 +858,10 @@ def main() -> int:
         "--simple-path", action="store_true",
         help="the k states may be assumed pairwise distinct",
     )
+    parser.add_argument(
+        "--btor2",
+        help="the Btor2 file a pono invariant is written over (dialect 'pono')",
+    )
     parser.add_argument("-o", "--output", help="where to write (default: stdout)")
     args = parser.parse_args()
 
@@ -527,10 +875,19 @@ def main() -> int:
     if task_text is None:
         return 1
 
+    btor2 = None
+    if args.btor2:
+        try:
+            with open(args.btor2, encoding="utf-8") as handle:
+                btor2 = handle.read()
+        except OSError as exc:
+            log.error(f"cannot read '{args.btor2}': {exc.strerror}", FILE_NAME)
+            return 1
+
     try:
         witness = translate(
             text, task_text, args.dialect, args.system, args.query, args.k,
-            args.simple_path,
+            args.simple_path, btor2,
         )
     except (InvariantError, moxi_task.TaskError, parse_moxiwit.ParseError) as exc:
         log.error(f"{exc}", FILE_NAME)

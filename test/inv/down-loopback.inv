@@ -1,0 +1,9 @@
+counterexample
+;; step 0
+(and
+  (= x_0 0)
+)
+;; loopback step 1
+(and
+  (= x_0 (- 1))
+)

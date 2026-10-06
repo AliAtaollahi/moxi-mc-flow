@@ -1,0 +1,23 @@
+(set-logic QF_BV)
+
+(define-system main
+  :input ((op Bool))                ; edge label: false=<<1, true=+2
+  :output ((s (_ BitVec 2)))
+  :local ()
+  :init (= s #b00)
+  :trans (or
+           (and (not op) (= s' (bvshl s #b01)))   ; <<1
+           (and op       (= s' (bvadd s #b10)))   ; +2 (mod 4)
+         )
+  :inv true
+)
+
+(check-system main
+  :input ((op Bool))
+  :output ((s (_ BitVec 2)))
+  :local ()
+  
+  :reachable (rch_11 (= s #b11))
+
+  :query (q1 (rch_11))
+)

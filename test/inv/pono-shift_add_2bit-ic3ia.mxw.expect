@@ -1,0 +1,12 @@
+(define-system pono_aux
+   :local ((rch_11__FLAG__ (_ BitVec 1)))
+   :init (= rch_11__FLAG__ #b0)
+   :trans (= rch_11__FLAG__' (ite (or (= rch_11__FLAG__ #b1) (= s #b11)) #b1 #b0))
+   :inv true)
+
+(check-system-response main
+:query (q1 :result unsat :certificate q1_cert)
+:certificate (q1_cert
+	:aux pono_aux
+	(and (and true (= #b0 ((_ extract 0 0) s))) (not (= rch_11__FLAG__ #b1))))
+)

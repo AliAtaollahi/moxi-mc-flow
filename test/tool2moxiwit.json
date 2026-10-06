@@ -76,7 +76,7 @@
             ]
         },
         {
-            "input": "inv/counter-cex.inv",
+            "input": "inv/counter-lossy.mxw",
             "options": [
                 "--task",
                 "inv/counter.moxi"
@@ -84,10 +84,74 @@
             "expected_returncode": 1
         },
         {
-            "input": "inv/counter-lossy.mxw",
+            "input": "inv/down-cex.inv",
             "options": [
                 "--task",
-                "inv/counter.moxi"
+                "inv/down.moxi"
+            ],
+            "output": "inv/down-cex.mxw",
+            "expected_output": [
+                [
+                    "inv/down-cex.mxw.expect",
+                    "inv/down-cex.mxw"
+                ]
+            ]
+        },
+        {
+            "input": "inv/down-loopback.inv",
+            "options": [
+                "--task",
+                "inv/down.moxi"
+            ],
+            "expected_returncode": 1
+        },
+        {
+            "input": "inv/pono-shift_add_2bit-ic3ia.inv",
+            "options": [
+                "--task",
+                "inv/pono-shift_add_2bit.moxi",
+                "--btor2",
+                "inv/pono-shift_add_2bit.btor2"
+            ],
+            "output": "inv/pono-shift_add_2bit-ic3ia.mxw",
+            "expected_output": [
+                [
+                    "inv/pono-shift_add_2bit-ic3ia.mxw.expect",
+                    "inv/pono-shift_add_2bit-ic3ia.mxw"
+                ]
+            ]
+        },
+        {
+            "input": "inv/pono-hamming-ic3ia.inv",
+            "options": [
+                "--task",
+                "inv/pono-hamming.moxi",
+                "--btor2",
+                "inv/pono-hamming.btor2"
+            ],
+            "output": "inv/pono-hamming-ic3ia.mxw",
+            "expected_output": [
+                [
+                    "inv/pono-hamming-ic3ia.mxw.expect",
+                    "inv/pono-hamming-ic3ia.mxw"
+                ]
+            ]
+        },
+        {
+            "input": "inv/pono-hamming-ic3sa.inv",
+            "options": [
+                "--task",
+                "inv/pono-hamming.moxi",
+                "--btor2",
+                "inv/pono-hamming.btor2"
+            ],
+            "expected_returncode": 1
+        },
+        {
+            "input": "inv/pono-shift_add_2bit-ic3ia.inv",
+            "options": [
+                "--task",
+                "inv/pono-shift_add_2bit.moxi"
             ],
             "expected_returncode": 1
         }

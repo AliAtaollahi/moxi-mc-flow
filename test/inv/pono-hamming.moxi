@@ -1,0 +1,29 @@
+(set-logic QF_BV)
+
+(define-system main
+  :input ()
+  :output ((s (_ BitVec 5)))
+  :local ()
+  :init (= s #b00000)
+  :trans (or
+    (= s' (bvxor s #b11000))
+    (= s' (bvxor s #b10100))
+    (= s' (bvxor s #b10010))
+    (= s' (bvxor s #b10001))
+    (= s' (bvxor s #b01100))
+    (= s' (bvxor s #b01010))
+    (= s' (bvxor s #b01001))
+    (= s' (bvxor s #b00110))
+    (= s' (bvxor s #b00101))
+    (= s' (bvxor s #b00011))
+  )
+  :inv true
+)
+
+(check-system main
+  :input ()
+  :output ((s (_ BitVec 5)))
+  :local ()
+  :reachable (rch_goal (= s #b11111))
+  :query (qry_goal (rch_goal))
+)

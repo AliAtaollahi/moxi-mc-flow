@@ -1,0 +1,12 @@
+(define-system pono_aux
+   :local ((s.init (_ BitVec 5)) (rch_goal__FLAG__ (_ BitVec 1)))
+   :init (and (= s.init s) (= rch_goal__FLAG__ #b0))
+   :trans (and (= s.init' s.init) (= rch_goal__FLAG__' (ite (or (= rch_goal__FLAG__ #b1) (= s #b11111)) #b1 #b0)))
+   :inv (= s.init #b00000))
+
+(check-system-response main
+:query (qry_goal :result unsat :certificate qry_goal_cert)
+:certificate (qry_goal_cert
+	:aux pono_aux
+	(let ((_let0 (= #b1 ((_ extract 0 0) s)))) (let ((_let1 (= #b1 ((_ extract 2 2) s)))) (let ((_let2 (= #b1 ((_ extract 1 1) s)))) (let ((_let3 (not _let2))) (let ((_let4 (not _let1))) (let ((_let5 (not _let0))) (let ((_let6 (or _let5 _let4))) (let ((_let7 (or _let6 _let3))) (let ((_let8 ((_ extract 4 4) s))) (let ((_let9 ((_ extract 3 3) s))) (let ((_let10 (not (= #b0 _let9)))) (let ((_let11 (not (= #b1 _let8)))) (let ((_let12 (not (= #b0 _let8)))) (let ((_let13 (not (= #b1 _let9)))) (let ((_let14 (or (or _let4 _let2) _let0))) (let ((_let15 (or (or (or (= s s.init) _let2) _let1) _let0))) (let ((_let16 (or (or _let5 _let2) _let1))) (let ((_let17 (or _let6 _let2))) (let ((_let18 (or (or _let3 _let1) _let0))) (let ((_let19 (or (or _let5 _let3) _let1))) (let ((_let20 (or (or _let4 _let3) _let0))) (and (and (and (and (and (and (and (and (and (and (and (and (and (and (and (and (and (and true (or (or _let16 _let11) _let13)) (or (or (or (or _let2 _let1) _let0) _let11) _let10)) (or _let15 _let12)) (or (or _let18 _let11) _let13)) (or (or _let14 _let11) _let13)) (or _let15 _let10)) (or (or _let7 _let12) _let10)) (or (or _let7 _let11) _let13)) (or (or _let17 _let12) _let13)) (or (or _let18 _let12) _let10)) (or (or _let19 _let12) _let13)) (or (or _let19 _let11) _let10)) (or (or _let20 _let11) _let10)) (or (or _let16 _let12) _let10)) (or (or _let14 _let12) _let10)) (or (or _let17 _let11) _let10)) (or (or _let20 _let12) _let13)) (not (= rch_goal__FLAG__ #b1)))))))))))))))))))))))))
+)

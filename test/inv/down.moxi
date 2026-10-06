@@ -1,0 +1,14 @@
+(set-logic QF_LIA)
+(define-system main 
+   :input () 
+   :output ((x_0 Int)) 
+   :local () 
+   :init (= x_0 0) 
+   :trans (= x_0' (- x_0 1)) 
+   :inv true )
+(check-system main 
+   :input () 
+   :output ((x_0 Int)) 
+   :local () 
+   :reachable (rch_0 (not (<= 0 x_0)))
+   :query (qry_rch_0 (rch_0)))
