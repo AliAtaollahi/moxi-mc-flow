@@ -5,20 +5,34 @@
             "input": "inv/counter.moxi",
             "output": "inv/counter.chc.smt2",
             "expected_output": [
-                ["inv/counter.chc.smt2.expect",
-                 "inv/counter.chc.smt2"]
+                [
+                    "inv/counter.chc.smt2.expect",
+                    "inv/counter.chc.smt2"
+                ]
             ]
         },
         {
             "input": "inv/two.moxi",
             "output": "inv/two.chc.smt2",
             "expected_output": [
-                ["inv/two.chc.smt2.expect",
-                 "inv/two.chc.smt2"]
+                [
+                    "inv/two.chc.smt2.expect",
+                    "inv/two.chc.smt2"
+                ]
             ]
         },
         {
             "input": "moxi/QF_LIA/DoubleDelay1.moxi",
+            "output": "moxi/QF_LIA/DoubleDelay1.chc.smt2",
+            "expected_output": [
+                [
+                    "moxi/QF_LIA/DoubleDelay1.chc.smt2.expect",
+                    "moxi/QF_LIA/DoubleDelay1.chc.smt2"
+                ]
+            ]
+        },
+        {
+            "input": "moxi/QF_LIA/CyclicSystem.moxi",
             "expected_returncode": 1
         }
     ]

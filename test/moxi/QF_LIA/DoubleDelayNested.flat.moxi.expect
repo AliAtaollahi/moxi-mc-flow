@@ -1,0 +1,17 @@
+(set-logic QF_LIA)
+
+(define-system QuadDelay
+   :input ((in Int))
+   :output ((out Int))
+   :local ((half Int) (Q1.temp Int) (Q1.D1.s Int) (Q1.D2.s Int) (Q2.temp Int) (Q2.D1.s Int) (Q2.D2.s Int))
+   :init (and (and (= Q1.temp 0) (= half 0)) (and (= Q2.temp 0) (= out 0)))
+   :trans (and (and (= Q1.temp' Q1.D1.s) (= half' Q1.D2.s)) (and (= Q2.temp' Q2.D1.s) (= out' Q2.D2.s)))
+   :inv (and (and (= Q1.D1.s in) (= Q1.D2.s Q1.temp)) (and (= Q2.D1.s half) (= Q2.D2.s Q2.temp))))
+
+(check-system QuadDelay
+  :input ( (in Int) )
+  :output ( (out Int) )
+  :local ((half Int) (Q1.temp Int) (Q1.D1.s Int) (Q1.D2.s Int) (Q2.temp Int) (Q2.D1.s Int) (Q2.D2.s Int))
+  :reachable (r1 (= out 10))
+  :query (q1 (r1))
+)

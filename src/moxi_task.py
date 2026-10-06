@@ -12,7 +12,8 @@ not need that.
 """
 
 import pathlib
-from typing import Optional
+import re
+from typing import Iterator, Optional
 
 from src import parse_moxiwit
 
@@ -21,6 +22,104 @@ FILE_NAME = pathlib.Path(__file__).name
 
 class TaskError(Exception):
     """The text is not a MoXI task this can read."""
+
+
+_ATOM = re.compile(r"[^\s()|]+")
+
+
+def symbols(term: str) -> Iterator[tuple[str, bool]]:
+    """`term` split into symbols and everything between them.
+
+    Yields `(piece, is_symbol)`. A symbol may be quoted, and a primed one
+    carries its quote mark with it, so `|a b|'` is one symbol and not three
+    pieces of punctuation. This is all the structure a renaming needs: a
+    symbol is replaced or it is not, and nothing else in the text moves.
+    """
+    i, plain = 0, []
+    while i < len(term):
+        c = term[i]
+        if c == "|":
+            end = term.find("|", i + 1)
+            if end < 0:
+                raise TaskError("a quoted symbol is left open")
+            end += 1
+            if end < len(term) and term[end] == "'":
+                end += 1
+            if plain:
+                yield "".join(plain), False
+                plain = []
+            yield term[i:end], True
+            i = end
+        elif c.isspace() or c in "()":
+            plain.append(c)
+            i += 1
+        else:
+            atom = _ATOM.match(term, i)
+            if plain:
+                yield "".join(plain), False
+                plain = []
+            yield atom.group(0), True
+            i = atom.end()
+    if plain:
+        yield "".join(plain), False
+
+
+def substituted(term: str, mapping: dict[str, str]) -> str:
+    """`term` with each symbol `mapping` names replaced.
+
+    A `let` that bound one of those names would shadow it, and this does not
+    look for one -- see `bound_names`, which the callers use to refuse such a
+    term rather than rewrite it wrongly.
+    """
+    return "".join(
+        mapping.get(piece, piece) if is_symbol else piece
+        for piece, is_symbol in symbols(term)
+    )
+
+
+def bound_names(term: str) -> set[str]:
+    """Every name a `let` in `term` binds.
+
+    A renaming may not pass through one of these: inside the body the name
+    means the bound term, not the variable, and replacing it there would move
+    the formula somewhere else entirely.
+    """
+    out: set[str] = set()
+    for match in re.finditer(r"\(\s*let\b", term):
+        try:
+            binders, _ = parse_moxiwit._sexp(term, match.end())
+        except parse_moxiwit.ParseError:
+            continue
+        for binder in parse_moxiwit._items(binders):
+            parts = parse_moxiwit._items(binder)
+            if parts:
+                out.add(parts[0])
+    return out
+
+
+# A symbol SMT-LIB lets stand without quoting bars.
+_SIMPLE = re.compile(r"[A-Za-z~!@$%^&*_\-+=<>.?/][0-9A-Za-z~!@$%^&*_\-+=<>.?/]*$")
+
+
+def bare(symbol: str) -> str:
+    """`symbol` without its quoting bars, if it had any."""
+    if symbol.startswith("|") and symbol.endswith("|") and len(symbol) > 1:
+        return symbol[1:-1]
+    return symbol
+
+
+def quoted(name: str) -> str:
+    """`name` written as a symbol, with bars if it needs them."""
+    return name if _SIMPLE.match(name) else f"|{name}|"
+
+
+def derived(symbol: str, suffix: str) -> str:
+    """A name made from `symbol`, with the bars put back around the whole.
+
+    `|a b|` plus `.init` is `|a b.init|` and not `|a b|.init`, which is a
+    quoted symbol followed by three characters of nothing.
+    """
+    return quoted(bare(symbol) + suffix)
 
 
 def check_system(task_text: str) -> list[str]:

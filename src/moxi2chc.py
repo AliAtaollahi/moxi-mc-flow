@@ -23,9 +23,12 @@ is checked against, which is what a certificate is supposed to be about.
 
     moxi2chc.py TASK.moxi [--query NAME] [--predicate NAME] [-o OUT]
 
-Only a flat system is translated -- one `define-system`, no `:subsys`. That is
-what `chc2moxi` produces, and composing subsystems is the front end's job, not
-this one's.
+A task whose system names instances of other systems is composed first, by
+`moxi_flatten`, because one predicate is one state and a task with subsystems
+has several. `--flat` writes that composed task out: when an instance has a
+local of its own the composition has to name it, and a certificate mentioning
+that name is a certificate about the composed task, which is the one to check
+it against.
 """
 
 import argparse
@@ -38,7 +41,7 @@ if __name__ == "__main__" and __package__ is None:
     # Run as a script (the test harness does), not only imported as a module.
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from src import log, moxi_task, parse_moxiwit
+from src import log, moxi_flatten, moxi_task, parse_moxiwit
 
 FILE_NAME = pathlib.Path(__file__).name
 
@@ -49,55 +52,11 @@ class TranslationError(Exception):
     """The task is not one this can write as Horn clauses."""
 
 
-def _symbols(text: str):
-    """`text` split into symbols and everything between them.
-
-    Yields `(piece, is_symbol)`. A symbol may be quoted, and a primed one
-    carries its quote mark with it, so `|a b|'` is one symbol and not three
-    pieces of punctuation.
-    """
-    i, plain = 0, []
-    while i < len(text):
-        c = text[i]
-        if c == "|":
-            end = text.find("|", i + 1)
-            if end < 0:
-                raise TranslationError("a quoted symbol is left open")
-            end += 1
-            if end < len(text) and text[end] == "'":
-                end += 1
-            if plain:
-                yield "".join(plain), False
-                plain = []
-            yield text[i:end], True
-            i = end
-        elif c.isspace() or c in "()":
-            plain.append(c)
-            i += 1
-        else:
-            atom = re.match(r"[^\s()|]+", text[i:])
-            if plain:
-                yield "".join(plain), False
-                plain = []
-            yield atom.group(0), True
-            i += atom.end()
-    if plain:
-        yield "".join(plain), False
-
-
 def next_name(symbol: str) -> str:
     """The name this gives the next-state copy of `symbol`."""
     if symbol.startswith("|") and symbol.endswith("|"):
         return f"|{symbol[1:-1]}{NEXT}|"
     return symbol + NEXT
-
-
-def substituted(term: str, mapping: dict[str, str]) -> str:
-    """`term` with each symbol `mapping` names replaced."""
-    return "".join(
-        mapping.get(piece, piece) if is_symbol else piece
-        for piece, is_symbol in _symbols(term)
-    )
 
 
 def define_system(text: str) -> dict:
@@ -107,8 +66,8 @@ def define_system(text: str) -> dict:
         raise TranslationError("the task defines no system")
     if len(starts) > 1:
         raise TranslationError(
-            f"the task defines {len(starts)} systems; only a flat task, with "
-            "the subsystems already composed, is translated"
+            f"the task defines {len(starts)} systems, which should have been "
+            "composed into one before this was reached"
         )
     command, _ = parse_moxiwit._sexp(text, starts[0])
     items = parse_moxiwit._items(command)
@@ -125,7 +84,8 @@ def define_system(text: str) -> dict:
             system[key[1:]] = value
         elif key == ":subsys":
             raise TranslationError(
-                "the system has a subsystem; only a flat task is translated"
+                "the system still has a subsystem, which should have been "
+                "composed away before this was reached"
             )
         i += 2
     system["variables"] = variables
@@ -136,6 +96,7 @@ def clauses(
     text: str, query: Optional[str] = None, predicate: str = "inv"
 ) -> str:
     """The task as a set of Horn clauses over one predicate."""
+    text = moxi_flatten.flattened(text)
     system = define_system(text)
     variables = system["variables"]
     declared = moxi_task.declared_variables(text)
@@ -157,6 +118,14 @@ def clauses(
     # may not prime anything, the whole formula is moved one step on.
     unprime = {name + "'": next_name(name) for name in names}
     shift = {name: next_name(name) for name in names}
+    for field in ("trans", "inv"):
+        shadowed = moxi_task.bound_names(system[field]) & set(names)
+        if shadowed:
+            raise TranslationError(
+                f"a 'let' in ':{field}' binds {', '.join(sorted(shadowed))}, "
+                "which naming the next state has to rename; a term that "
+                "shadows a variable of its own system is not translated"
+            )
 
     reachable = moxi_task.reachable_definitions(text)
     asked = moxi_task.queries(text)
@@ -188,7 +157,7 @@ def clauses(
         f"({next_name(name)} {sort})" for name, sort in variables
     )
     invariant = system["inv"]
-    invariant_next = substituted(invariant, shift)
+    invariant_next = moxi_task.substituted(invariant, shift)
 
     # A system with no state is still a Horn problem, with a nullary
     # predicate -- but SMT-LIB has no `forall` over nothing, so the quantifier
@@ -207,7 +176,7 @@ def clauses(
         quantified(f"(=> (and {invariant} {system['init']}) {use})", binder),
         quantified(
             f"(=> (and {use} {invariant} {invariant_next} "
-            f"{substituted(system['trans'], unprime)})\n      {use_next})",
+            f"{moxi_task.substituted(system['trans'], unprime)})\n      {use_next})",
             f"{binder} {binder_next}",
         ),
         quantified(f"(=> (and {use} {invariant} {condition}) false)", binder),
@@ -243,6 +212,9 @@ def main() -> int:
     parser.add_argument(
         "--predicate", default="inv", help="the predicate's name (default: inv)"
     )
+    parser.add_argument(
+        "--flat", help="also write the task with its subsystems composed"
+    )
     parser.add_argument("-o", "--output", help="where to write (default: stdout)")
     args = parser.parse_args()
 
@@ -250,8 +222,16 @@ def main() -> int:
     if text is None:
         return 1
     try:
+        if args.flat:
+            with open(args.flat, "w", encoding="utf-8") as handle:
+                handle.write(moxi_flatten.flattened(text))
         out = clauses(text, args.query, args.predicate)
-    except (TranslationError, moxi_task.TaskError, parse_moxiwit.ParseError) as exc:
+    except (
+        TranslationError,
+        moxi_flatten.FlattenError,
+        moxi_task.TaskError,
+        parse_moxiwit.ParseError,
+    ) as exc:
         log.error(f"{exc}", FILE_NAME)
         return 1
 

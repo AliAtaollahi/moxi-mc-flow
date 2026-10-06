@@ -1,0 +1,18 @@
+(set-logic QF_LIA)
+
+(define-system DoubleDelay
+   :input ((in Int))
+   :output ((out Int))
+   :local ((temp Int) (D1.s Int) (D2.s Int))
+   :init (and (= temp 0) (= out 0))
+   :trans (and (= temp' D1.s) (= out' D2.s))
+   :inv (and (= D1.s in) (= D2.s temp)))
+
+(check-system DoubleDelay
+  :input ( (in Int) ) 
+  :output ( (out Int) )
+  :local ((temp Int) (D1.s Int) (D2.s Int))
+  :reachable (r1 (= out 10))
+  :reachable (r2 (= out (- 10)))
+  :queries ( (q1 (r1)) (q2 (r2)) )
+)

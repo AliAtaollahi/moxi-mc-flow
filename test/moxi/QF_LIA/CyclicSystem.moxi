@@ -1,0 +1,19 @@
+(set-logic QF_LIA)
+
+(define-system A :input ( (i Int) ) :output ( (o Int) )
+  :local ()
+  :subsys (b (B i o))
+)
+
+(define-system B :input ( (i Int) ) :output ( (o Int) )
+  :local ()
+  :subsys (a (A i o))
+)
+
+(check-system A
+  :input ( (i Int) )
+  :output ( (o Int) )
+  :local ()
+  :reachable (r1 (= o 10))
+  :query (q1 (r1))
+)

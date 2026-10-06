@@ -1,0 +1,12 @@
+;; Written by moxi2chc from a MoXI task: one predicate over the
+;; variables of system 'DoubleDelay', asking query 'q1'.
+(set-logic HORN)
+(declare-fun inv (Int Int Int Int Int) Bool)
+(assert (forall ((in Int) (out Int) (temp Int) (D1.s Int) (D2.s Int))
+  (=> (and (and (= D1.s in) (= D2.s temp)) (and (= temp 0) (= out 0))) (inv in out temp D1.s D2.s))))
+(assert (forall ((in Int) (out Int) (temp Int) (D1.s Int) (D2.s Int) (in.next Int) (out.next Int) (temp.next Int) (D1.s.next Int) (D2.s.next Int))
+  (=> (and (inv in out temp D1.s D2.s) (and (= D1.s in) (= D2.s temp)) (and (= D1.s.next in.next) (= D2.s.next temp.next)) (and (= temp.next D1.s) (= out.next D2.s)))
+      (inv in.next out.next temp.next D1.s.next D2.s.next))))
+(assert (forall ((in Int) (out Int) (temp Int) (D1.s Int) (D2.s Int))
+  (=> (and (inv in out temp D1.s D2.s) (and (= D1.s in) (= D2.s temp)) (= out 10)) false)))
+(check-sat)

@@ -1,0 +1,29 @@
+{
+    "script": "../src/moxi_flatten.py",
+    "tests": [
+        {
+            "input": "moxi/QF_LIA/DoubleDelay1.moxi",
+            "output": "moxi/QF_LIA/DoubleDelay1.flat.moxi",
+            "expected_output": [
+                [
+                    "moxi/QF_LIA/DoubleDelay1.flat.moxi.expect",
+                    "moxi/QF_LIA/DoubleDelay1.flat.moxi"
+                ]
+            ]
+        },
+        {
+            "input": "moxi/QF_LIA/DoubleDelayNested.moxi",
+            "output": "moxi/QF_LIA/DoubleDelayNested.flat.moxi",
+            "expected_output": [
+                [
+                    "moxi/QF_LIA/DoubleDelayNested.flat.moxi.expect",
+                    "moxi/QF_LIA/DoubleDelayNested.flat.moxi"
+                ]
+            ]
+        },
+        {
+            "input": "moxi/QF_LIA/CyclicSystem.moxi",
+            "expected_returncode": 1
+        }
+    ]
+}

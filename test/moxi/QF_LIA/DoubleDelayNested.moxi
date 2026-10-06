@@ -1,0 +1,31 @@
+(set-logic QF_LIA)
+
+; One-step delay
+(define-system Delay :input ( (i Int) ) :output ( (o Int) )
+  :local ( (s Int) )
+  :inv (= s i)
+  :init (= o 0)
+  :trans (= o' s)
+)
+
+; Two-step delay, built from two one-step delays
+(define-system DoubleDelay :input ( (in Int) ) :output ( (out Int) )
+  :local ( (temp Int) )
+  :subsys  (D1 (Delay in temp))
+  :subsys  (D2 (Delay temp out))
+)
+
+; Four-step delay, built from two two-step delays
+(define-system QuadDelay :input ( (in Int) ) :output ( (out Int) )
+  :local ( (half Int) )
+  :subsys  (Q1 (DoubleDelay in half))
+  :subsys  (Q2 (DoubleDelay half out))
+)
+
+(check-system QuadDelay
+  :input ( (in Int) )
+  :output ( (out Int) )
+  :local ( (half Int) )
+  :reachable (r1 (= out 10))
+  :query (q1 (r1))
+)

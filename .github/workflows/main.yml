@@ -60,6 +60,11 @@ jobs:
         cd test/
         python3 test.py moxi2chc.json
 
+    - name: moxi_flatten
+      run: |
+        cd test/
+        python3 test.py moxi_flatten.json
+
     - name: sortcheck
       run: |
         cd test/
