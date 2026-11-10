@@ -4,6 +4,26 @@ The scripts that translated the CHC-COMP 2025 benchmarks into the MoXI tasks
 of SV-Benchmarks (`moxi/*/chc-comp25/`, merge request !1797 of
 sosy-lab/benchmarking/sv-benchmarks).
 
+## Mapping
+
+`chc25-mapping.csv` gives, for each of the 1,987 tasks in
+`moxi/*/chc-comp25/` of SV-Benchmarks, the clause file it was translated
+from:
+
+- `task`, `logic`: the task name and its folder `moxi/<logic>/chc-comp25/`.
+- `source`: the path of the clause file in chc-comp25-benchmarks (commit
+  below).
+- `sha1`: the SHA-1 of that clause file. The files were matched by this
+  SHA-1, not by name, so the mapping is exact.
+- `label`: the `expected_verdict` of the task in SV-Benchmarks.
+- `chc-comp26-status`: the `majority_vote_verdict` of the source in
+  https://github.com/chc-comp/chc-comp26-benchmarks (`sat_validated`, `sat`,
+  `unsat`, `inconsistent`), `placeholder` if CHC-COMP filled in `true`
+  because no tool solved it, or `no-vote` if there is no vote.
+
+The table lists all tasks as first added; later merge requests of
+SV-Benchmarks remove some of them (duplicates, unknown verdicts).
+
 ## Steps
 
 `translate_one.py` translates one clause file. For each file it runs:
